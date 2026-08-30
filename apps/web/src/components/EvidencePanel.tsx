@@ -1,6 +1,6 @@
 "use client";
 
-import type { CitationSource, DocumentDetail } from "@company/shared";
+import type { CitationSource, DocumentDetail } from "@kiro/shared";
 
 export default function EvidencePanel({
   document,

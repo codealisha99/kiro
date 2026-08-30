@@ -17,7 +17,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@company/shared':
+      '@kiro/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@nestjs/common':
@@ -135,7 +135,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@company/shared':
+      '@kiro/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       next:

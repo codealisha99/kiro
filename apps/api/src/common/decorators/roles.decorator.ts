@@ -1,5 +1,5 @@
 import { SetMetadata } from "@nestjs/common";
-import type { RBACRole } from "@company/shared";
+import type { RBACRole } from "@kiro/shared";
 
 export const ROLES_KEY = "roles";
 

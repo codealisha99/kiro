@@ -13,10 +13,10 @@ import type {
   RegisterRequest,
   SourceDto,
   UserDto,
-} from "@company/shared";
+} from "@kiro/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-const TOKEN_KEY = "company-brain-token";
+const TOKEN_KEY = "kiro-token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") {

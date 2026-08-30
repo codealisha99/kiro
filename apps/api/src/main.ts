@@ -25,7 +25,7 @@ async function bootstrap() {
   const port = config.get<number>("PORT", 3001);
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`Company Brain API listening on http://localhost:${port}`);
+  console.log(`Kiro API listening on http://localhost:${port}`);
 }
 
 void bootstrap();

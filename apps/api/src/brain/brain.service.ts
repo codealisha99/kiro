@@ -8,7 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RetrievalService, RetrievedChunk } from "../retrieval/retrieval.service";
 import { AiGatewayService } from "../ai-gateway/ai-gateway.service";
 import { ConversationsService } from "../conversations/conversations.service";
-import type { AnswerStatus, BrainQueryResponse, CitationSource } from "@company/shared";
+import type { AnswerStatus, BrainQueryResponse, CitationSource } from "@kiro/shared";
 
 export interface BrainQueryInput {
   query: string;
@@ -18,7 +18,7 @@ export interface BrainQueryInput {
 const TOP_K = 5;
 const EXCERPT_LENGTH = 240;
 
-const SYSTEM_PROMPT = `You are Company Brain, an internal enterprise knowledge assistant.
+const SYSTEM_PROMPT = `You are Kiro, an internal enterprise knowledge assistant.
 Answer ONLY from the evidence supplied below. Follow these rules strictly:
 1. Base your answer exclusively on the provided evidence. If the evidence is insufficient to answer, say so and mark the status "unknown".
 2. After each statement, cite the supporting evidence using its bracket number, e.g. [1]. For multiple supporting pieces use [1][2].

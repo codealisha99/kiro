@@ -6,7 +6,7 @@ export class HealthController {
   health() {
     return {
       status: "ok",
-      service: "company-brain-api",
+      service: "kiro-api",
       timestamp: new Date().toISOString(),
     };
   }

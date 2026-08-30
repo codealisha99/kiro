@@ -1,5 +1,5 @@
 {
-  "name": "@company/web",
+  "name": "@kiro/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@company/shared": "workspace:*",
+    "@kiro/shared": "workspace:*",
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
