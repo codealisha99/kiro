@@ -1,0 +1,298 @@
+// Company Brain — Prisma schema
+// Covers PRD knowledge object model + query data model + Phase 1 identity.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Phase 1: identity & tenants ----
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String   @unique
+  name      String?
+  password  String? // bcrypt hash (null when SSO/OIDC managed)
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  sessions Session[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+// ---- Session (JWT/session store for auth) ----
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---- Knowledge object model (PRD section 8) ----
+
+model Source {
+  id         String   @id @default(cuid())
+  tenantId   String
+  type       SourceType
+  name       String
+  config     Json?
+  status     SourceStatus @default(DISCONNECTED)
+  lastSyncAt DateTime?
+  deleted    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  documents Document[]
+
+  @@index([tenantId])
+  @@index([tenantId, deleted])
+  @@map("sources")
+}
+
+enum SourceType {
+  GOOGLE_DRIVE
+  SLACK
+  CRM
+  MANUAL
+}
+
+enum SourceStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  SYNCING
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  tenantId       String
+  sourceId       String
+  externalId     String
+  title          String
+  ownerId        String
+  classification Classification @default(INTERNAL)
+  status         DocumentStatus @default(PUBLISHED)
+  deleted        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  source   Source @relation(fields: [sourceId], references: [id])
+  versions DocumentVersion[]
+  acl      DocumentACL[]
+  evidence ResponseEvidence[]
+
+  @@index([tenantId])
+  @@index([tenantId, deleted])
+  @@index([sourceId])
+  @@unique([tenantId, sourceId, externalId])
+  @@map("documents")
+}
+
+enum Classification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model DocumentVersion {
+  id             String   @id @default(cuid())
+  documentId     String
+  version        Int
+  contentHash    String
+  content        String?  @db.Text
+  filename       String?
+  approvalStatus ApprovalStatus @default(PENDING)
+  createdAt      DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunks   DocumentChunk[]
+  evidence ResponseEvidence[]
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model DocumentChunk {
+  id                String   @id @default(cuid())
+  documentVersionId String
+  content           String
+  embedding         Unsupported("vector(1536)")?
+  metadata          Json?
+
+  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+
+  @@index([documentVersionId])
+  @@map("document_chunks")
+}
+
+model DocumentACL {
+  id            String @id @default(cuid())
+  documentId    String
+  principalType PrincipalType
+  principalId   String
+  permission    Permission @default(READ)
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, principalType, principalId])
+  @@map("document_acl")
+}
+
+enum PrincipalType {
+  USER
+  ROLE
+  GROUP
+}
+
+enum Permission {
+  READ
+  WRITE
+  ADMIN
+}
+
+// ---- Query data model (PRD section 9) ----
+
+model Conversation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests AIRequest[]
+
+  @@index([tenantId, userId])
+  @@map("conversations")
+}
+
+model AIRequest {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String
+  conversationId String
+  query          String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  responses    AIResponse[]
+
+  @@index([tenantId])
+  @@index([conversationId])
+  @@map("ai_requests")
+}
+
+model AIResponse {
+  id           String   @id @default(cuid())
+  requestId    String
+  answer       String
+  status       String   @default("answered")
+  model        String
+  modelVersion String
+  confidence   Float
+  createdAt    DateTime @default(now())
+
+  request  AIRequest          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  evidence ResponseEvidence[]
+
+  @@index([requestId])
+  @@map("ai_responses")
+}
+
+model ResponseEvidence {
+  id             String  @id @default(cuid())
+  responseId     String
+  documentId     String
+  versionId      String
+  chunkId        String?
+  relevanceScore Float
+
+  response AIResponse       @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  document Document         @relation(fields: [documentId], references: [id])
+  version  DocumentVersion  @relation(fields: [versionId], references: [id])
+
+  @@index([responseId])
+  @@index([versionId])
+  @@map("response_evidence")
+}
+
+// ---- Audit log (PRD section 7.5) ----
+model AuditLog {
+  id               String   @id @default(cuid())
+  tenantId         String
+  userId           String?
+  action           String
+  resource         String?
+  resourceId       String?
+  query            String?
+  retrievedSources Json?
+  permissionDecision String?
+  model            String?
+  responseId       String?
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ---- User feedback on answers ----
+model Feedback {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  requestId String
+  helpful   Boolean
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([requestId])
+  @@map("feedback")
+}
