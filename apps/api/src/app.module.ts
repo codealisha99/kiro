@@ -6,6 +6,7 @@ import { RedisModule } from "./redis/redis.module";
 import { LoggingModule } from "./common/logging.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
+import { IngestionModule } from "./ingestion/ingestion.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UsersModule } from "./users/users.module";
     RedisModule,
     AuthModule,
     UsersModule,
+    IngestionModule,
   ],
   controllers: [HealthController],
   providers: [],
