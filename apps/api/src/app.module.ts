@@ -6,6 +6,7 @@ import { RedisModule } from "./redis/redis.module";
 import { LoggingModule } from "./common/logging.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
+import { AiGatewayModule } from "./ai-gateway/ai-gateway.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
 import { RetrievalModule } from "./retrieval/retrieval.module";
 
@@ -20,6 +21,7 @@ import { RetrievalModule } from "./retrieval/retrieval.module";
     RedisModule,
     AuthModule,
     UsersModule,
+    AiGatewayModule,
     IngestionModule,
     RetrievalModule,
   ],
