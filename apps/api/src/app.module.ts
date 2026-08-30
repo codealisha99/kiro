@@ -7,6 +7,7 @@ import { LoggingModule } from "./common/logging.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
+import { RetrievalModule } from "./retrieval/retrieval.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { IngestionModule } from "./ingestion/ingestion.module";
     AuthModule,
     UsersModule,
     IngestionModule,
+    RetrievalModule,
   ],
   controllers: [HealthController],
   providers: [],
