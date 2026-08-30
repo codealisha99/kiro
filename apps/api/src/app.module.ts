@@ -11,6 +11,8 @@ import { IngestionModule } from "./ingestion/ingestion.module";
 import { RetrievalModule } from "./retrieval/retrieval.module";
 import { ConversationsModule } from "./conversations/conversations.module";
 import { BrainModule } from "./brain/brain.module";
+import { FeedbackModule } from "./feedback/feedback.module";
+import { AdminModule } from "./admin/admin.module";
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { BrainModule } from "./brain/brain.module";
     RetrievalModule,
     ConversationsModule,
     BrainModule,
+    FeedbackModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [],
