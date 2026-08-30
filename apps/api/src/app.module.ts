@@ -9,6 +9,8 @@ import { UsersModule } from "./users/users.module";
 import { AiGatewayModule } from "./ai-gateway/ai-gateway.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
 import { RetrievalModule } from "./retrieval/retrieval.module";
+import { ConversationsModule } from "./conversations/conversations.module";
+import { BrainModule } from "./brain/brain.module";
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { RetrievalModule } from "./retrieval/retrieval.module";
     AiGatewayModule,
     IngestionModule,
     RetrievalModule,
+    ConversationsModule,
+    BrainModule,
   ],
   controllers: [HealthController],
   providers: [],
