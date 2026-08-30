@@ -4,6 +4,7 @@ import { HealthController } from "./health/health.controller";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 import { LoggingModule } from "./common/logging.module";
+import { AuthModule } from "./auth/auth.module";
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { LoggingModule } from "./common/logging.module";
     LoggingModule,
     PrismaModule,
     RedisModule,
+    AuthModule,
   ],
   controllers: [HealthController],
   providers: [],
