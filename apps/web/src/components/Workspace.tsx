@@ -10,7 +10,7 @@ import type {
   DocumentListItem,
   SourceDto,
   UserDto,
-} from "@company/shared";
+} from "@kiro/shared";
 import { api, clearToken, getToken } from "@/lib/api";
 import AuthScreen from "./AuthScreen";
 import EvidencePanel from "./EvidencePanel";
@@ -264,8 +264,8 @@ export default function Workspace() {
     >
       <aside className="rail">
         <div className="brand">
-          <div className="brand-mark">Internal desk</div>
-          <h1>Company Brain</h1>
+          <div className="brand-mark">Internal knowledge</div>
+          <h1>Kiro</h1>
           <p>Answers with a paper trail.</p>
         </div>
         <div className="who">

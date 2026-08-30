@@ -1,4 +1,4 @@
-"""Configuration for the Company Brain AI service.
+"""Configuration for the Kiro AI service.
 
 All values are overridable via the environment using the ``AI_`` prefix
 (e.g. ``AI_LLM_BASE_URL``) so the gateway stays provider-independent —

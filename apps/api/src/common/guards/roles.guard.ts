@@ -5,7 +5,7 @@ import {
   Injectable,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import type { RBACRole } from "@company/shared";
+import type { RBACRole } from "@kiro/shared";
 import type { AuthenticatedUser } from "../../auth/jwt-payload.interface";
 import { ROLES_KEY } from "../decorators/roles.decorator";
 

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { AuthenticatedUser } from "../auth/jwt-payload.interface";
 import { PrismaService } from "../prisma/prisma.service";
-import type { AnswerStatus, CitationSource } from "@company/shared";
+import type { AnswerStatus, CitationSource } from "@kiro/shared";
 
 @Injectable()
 export class ConversationsService {

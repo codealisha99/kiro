@@ -10,6 +10,6 @@ router = APIRouter()
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
-        "service": "company-brain-ai",
+        "service": "kiro-ai",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

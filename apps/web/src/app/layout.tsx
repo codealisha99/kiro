@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Company Brain",
+  title: "Kiro",
   description: "Ask what the company knows. See the source.",
 };
 

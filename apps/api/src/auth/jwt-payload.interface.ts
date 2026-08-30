@@ -1,4 +1,4 @@
-import type { RBACRole } from "@company/shared";
+import type { RBACRole } from "@kiro/shared";
 
 /** Shape embedded in the signed JWT. */
 export interface JwtPayload {
