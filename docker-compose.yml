@@ -31,6 +31,62 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: kiro-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://kiro:kiro@postgres:5432/kiro?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      AI_SERVICE_URL: "http://ai:8000"
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-change-me}"
+      PORT: "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai:
+        condition: service_started
+
+  ai:
+    build:
+      context: .
+      dockerfile: apps/ai/Dockerfile
+    container_name: kiro-ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      AI_LLM_BASE_URL: "${AI_LLM_BASE_URL:-https://api.openai.com/v1}"
+      AI_LLM_API_KEY: "${AI_LLM_API_KEY:-}"
+      AI_LLM_MODEL: "${AI_LLM_MODEL:-gpt-4o-mini}"
+      AI_EMBEDDING_MODEL: "${AI_EMBEDDING_MODEL:-text-embedding-3-small}"
+      AI_EMBEDDING_DIMENSIONS: "${AI_EMBEDDING_DIMENSIONS:-1536}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/admin/health', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: kiro-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   pgdata:
   redisdata:
