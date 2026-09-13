@@ -14,6 +14,7 @@ import { BrainModule } from "./brain/brain.module";
 import { FeedbackModule } from "./feedback/feedback.module";
 import { AdminModule } from "./admin/admin.module";
 import { StorageModule } from "./storage/storage.module";
+import { ConnectorsModule } from "./connectors/connectors.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { StorageModule } from "./storage/storage.module";
     FeedbackModule,
     AdminModule,
     StorageModule,
+    ConnectorsModule,
   ],
   controllers: [HealthController],
   providers: [],
