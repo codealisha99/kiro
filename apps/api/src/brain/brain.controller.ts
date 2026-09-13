@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { IsOptional, IsString, MinLength } from "class-validator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { ThrottleGuard } from "../common/throttle.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/jwt-payload.interface";
 import { BrainService } from "./brain.service";
@@ -23,7 +24,7 @@ class BrainQueryDto {
 }
 
 @Controller("brain")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ThrottleGuard)
 export class BrainController {
   constructor(private readonly brain: BrainService) {}
 

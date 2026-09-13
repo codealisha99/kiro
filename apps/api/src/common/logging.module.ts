@@ -11,7 +11,7 @@ import { LoggerModule } from "nestjs-pino";
             ? { target: "pino-pretty", options: { colorize: true } }
             : undefined,
         autoLogging: {
-          ignore: (req) => req.url === "/admin/health",
+          ignore: (req) => req.url === "/admin/health" || req.url === "/health" || req.url === "/metrics/prometheus",
         },
         redact: {
           paths: [
