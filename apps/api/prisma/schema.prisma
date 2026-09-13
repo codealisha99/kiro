@@ -235,6 +235,7 @@ model AIResponse {
   model        String
   modelVersion String
   confidence   Float
+  usage        Json?
   createdAt    DateTime @default(now())
 
   request  AIRequest          @relation(fields: [requestId], references: [id], onDelete: Cascade)
