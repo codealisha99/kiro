@@ -13,6 +13,7 @@ import { ConversationsModule } from "./conversations/conversations.module";
 import { BrainModule } from "./brain/brain.module";
 import { FeedbackModule } from "./feedback/feedback.module";
 import { AdminModule } from "./admin/admin.module";
+import { MetricsModule } from "./metrics/metrics.module";
 import { StorageModule } from "./storage/storage.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
 
@@ -34,6 +35,7 @@ import { ConnectorsModule } from "./connectors/connectors.module";
     BrainModule,
     FeedbackModule,
     AdminModule,
+    MetricsModule,
     StorageModule,
     ConnectorsModule,
   ],
