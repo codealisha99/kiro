@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RetrievalService } from "../retrieval/retrieval.service";
 import { AiGatewayService } from "../ai-gateway/ai-gateway.service";
 import { ConversationsService } from "../conversations/conversations.service";
+import { MetricsService } from "../metrics/metrics.service";
 
 const user = { id: "u1", email: "a@b.co", tenantId: "t1", role: "employee" as const };
 
@@ -44,7 +45,8 @@ describe("BrainService", () => {
     const retrieval = { search: jest.fn().mockResolvedValue([]) } as unknown as RetrievalService;
     const ai = { generate: jest.fn() } as unknown as AiGatewayService;
 
-    const service = new BrainService(prisma, retrieval, ai, conversations);
+    const metrics = { incr: jest.fn(), observeLatency: jest.fn() } as unknown as MetricsService;
+    const service = new BrainService(prisma, retrieval, ai, conversations, metrics);
     const result = await service.query(user, { query: "What was our revenue in 2035?" });
 
     expect(result.status).toBe("unknown");
@@ -76,7 +78,8 @@ describe("BrainService", () => {
         }),
     } as unknown as AiGatewayService;
 
-    const service = new BrainService(prisma, retrieval, ai, conversations);
+    const metrics = { incr: jest.fn(), observeLatency: jest.fn() } as unknown as MetricsService;
+    const service = new BrainService(prisma, retrieval, ai, conversations, metrics);
     const result = await service.query(user, { query: "What is our refund policy?" });
 
     expect(result.status).toBe("answered");
@@ -108,7 +111,8 @@ describe("BrainService", () => {
       }),
     } as unknown as AiGatewayService;
 
-    const service = new BrainService(prisma, retrieval, ai, conversations);
+    const metrics = { incr: jest.fn(), observeLatency: jest.fn() } as unknown as MetricsService;
+    const service = new BrainService(prisma, retrieval, ai, conversations, metrics);
     const result = await service.query(user, { query: "What was our revenue?" });
     expect(result.status).toBe("unknown");
     expect(result.answer).toBe("The evidence does not contain revenue figures.");
@@ -124,11 +128,13 @@ describe("BrainService", () => {
       search: jest.fn().mockRejectedValue(new Error("pgvector down")),
     } as unknown as RetrievalService;
 
+    const metrics = { incr: jest.fn(), observeLatency: jest.fn() } as unknown as MetricsService;
     const service = new BrainService(
       prisma,
       retrieval,
       {} as AiGatewayService,
       conversations,
+      metrics,
     );
 
     await expect(service.query(user, { query: "anything" })).rejects.toBeInstanceOf(
