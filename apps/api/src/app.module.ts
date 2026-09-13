@@ -13,6 +13,7 @@ import { ConversationsModule } from "./conversations/conversations.module";
 import { BrainModule } from "./brain/brain.module";
 import { FeedbackModule } from "./feedback/feedback.module";
 import { AdminModule } from "./admin/admin.module";
+import { StorageModule } from "./storage/storage.module";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AdminModule } from "./admin/admin.module";
     BrainModule,
     FeedbackModule,
     AdminModule,
+    StorageModule,
   ],
   controllers: [HealthController],
   providers: [],
