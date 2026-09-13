@@ -150,4 +150,15 @@ export const api = {
 
   feedback: (body: { requestId: string; helpful: boolean; comment?: string }) =>
     request<{ ok: boolean }>("/feedback", { method: "POST", body }),
+
+  documentVersions: (id: string) =>
+    request<{ id: string; documentId: string; version: number; contentHash: string; filename: string | null; approvalStatus: string; createdAt: string }[]>(`/documents/${id}/versions`),
+  deleteDocument: (id: string) =>
+    request<{ ok: boolean }>(`/documents/${id}`, { method: "DELETE" }),
+  revokeAcl: (id: string, body: { principalType: string; principalId: string }) =>
+    request<{ ok: boolean }>(`/documents/${id}/revoke`, { method: "POST", body }),
+  metrics: () => request<{ counters: Record<string, number>; latencies: Record<string, { count: number; avgMs: number; errors: number }>; uptimeSeconds: number }>("/metrics"),
+  adminMetrics: () => request<{ queries: number; feedback: { helpful: boolean; _count: number }[]; recentErrors: unknown[] }>("/admin/metrics"),
+  evalRetrieval: () => request<{ total: number; hits: number; hitRate: number; results: unknown[] }>("/evals/retrieval"),
+  evalRag: () => request<{ total: number; ok: number; accuracy: number; results: unknown[] }>("/evals/rag"),
 };
