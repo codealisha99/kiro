@@ -14,6 +14,7 @@ import { BrainModule } from "./brain/brain.module";
 import { FeedbackModule } from "./feedback/feedback.module";
 import { AdminModule } from "./admin/admin.module";
 import { MetricsModule } from "./metrics/metrics.module";
+import { EvalModule } from "./evals/eval.module";
 import { StorageModule } from "./storage/storage.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
 
@@ -36,6 +37,7 @@ import { ConnectorsModule } from "./connectors/connectors.module";
     FeedbackModule,
     AdminModule,
     MetricsModule,
+    EvalModule,
     StorageModule,
     ConnectorsModule,
   ],
