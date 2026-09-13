@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -12,10 +13,11 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { ThrottleGuard } from "../common/throttle.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/jwt-payload.interface";
 import { IngestionService } from "./ingestion.service";
-import { IngestDocumentDto } from "./dto/ingestion.dto";
+import { IngestDocumentDto, RevokeAclDto } from "./dto/ingestion.dto";
 
 @Controller("documents")
 @UseGuards(JwtAuthGuard)
@@ -28,6 +30,7 @@ export class DocumentsController {
   }
 
   @Post("upload")
+  @UseGuards(ThrottleGuard)
   @UseInterceptors(
     FileInterceptor("file", {
       storage: memoryStorage(),
@@ -54,9 +57,28 @@ export class DocumentsController {
     return this.ingestion.seedDemo(user);
   }
 
+  @Get(":id/versions")
+  versions(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.ingestion.listVersions(user, id);
+  }
+
   @Get(":id")
   get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
     return this.ingestion.getDocument(user, id);
+  }
+
+  @Delete(":id")
+  remove(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    return this.ingestion.deleteDocument(user, id);
+  }
+
+  @Post(":id/revoke")
+  revoke(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: RevokeAclDto,
+  ) {
+    return this.ingestion.revokeAccess(user, id, dto.principalType, dto.principalId);
   }
 
   @Post()

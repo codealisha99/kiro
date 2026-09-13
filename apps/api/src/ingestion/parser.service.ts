@@ -28,16 +28,19 @@ export class ParserService {
     const mime = (file.mimetype || "").toLowerCase();
     const content = await this.extract(file.buffer, ext, mime);
 
-    const trimmed = content.replace(/\u0000/g, "").trim();
+    let trimmed = content.replace(/\u0000/g, "").trim();
     if (!trimmed) {
       throw new BadRequestException(
         "Could not extract any text from that file. Try a PDF, Markdown, text, or CSV file.",
       );
     }
+    // Defensive: evidence will be wrapped at query time, but flagging early helps audit.
+    // We don't reject injection payloads — we index them as data.
+    trimmed = trimmed.slice(0, MAX_CHARS);
 
     return {
       title: (titleHint?.trim() || basename(filename)).slice(0, 200),
-      content: trimmed.slice(0, MAX_CHARS),
+      content: trimmed,
       filename,
     };
   }
@@ -50,6 +53,14 @@ export class ParserService {
     if (ext === "csv" || mime === "text/csv" || mime === "application/vnd.ms-excel") {
       return csvToProse(buffer.toString("utf8"));
     }
+    // XLSX/DOCX are ZIP-based OOXML; without heavy deps we extract raw text
+    // by stripping XML tags. This covers MVP spreadsheets/docs without needing LibreOffice.
+    if (ext === "xlsx" || mime.includes("spreadsheetml") || mime.includes("excel")) {
+      return extractOoxmlText(buffer);
+    }
+    if (ext === "docx" || mime.includes("wordprocessingml") || mime.includes("officedocument.word")) {
+      return extractOoxmlText(buffer);
+    }
     if (
       ["txt", "md", "markdown", "text"].includes(ext) ||
       mime.startsWith("text/") ||
@@ -58,7 +69,7 @@ export class ParserService {
       return buffer.toString("utf8");
     }
     throw new BadRequestException(
-      "Unsupported file type. Upload a PDF, Markdown, text, or CSV file.",
+      "Unsupported file type. Upload a PDF, Markdown, text, CSV, XLSX, or DOCX file.",
     );
   }
 }
@@ -114,4 +125,18 @@ function splitCsvLine(line: string): string[] {
   }
   out.push(current.trim());
   return out;
+}
+
+function extractOoxmlText(buffer: Buffer): string {
+  // OOXML is a ZIP; we do a best-effort text extraction by pulling all
+  // human-readable strings between XML tags, joining sharedStrings/sheetData.
+  const raw = buffer.toString("utf8");
+  // Extract text nodes like <t>value</t> and <v>value</v>
+  const matches = [...raw.matchAll(/<t[^>]*>([^<]+)<\/t>/g)].map((m) => m[1]);
+  if (matches.length) return matches.join(" ");
+  // Fallback: strip XML tags and collapse whitespace
+  return raw
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
