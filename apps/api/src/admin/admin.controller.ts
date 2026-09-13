@@ -31,11 +31,26 @@ export class AdminController {
 
   @Get("ingestion")
   async ingestion(@CurrentUser() user: AuthenticatedUser) {
-    const [stats, sources, docs] = await Promise.all([
+    const [stats, sources, docs, failed] = await Promise.all([
       this.queue.queueStats(),
       this.prisma.source.count({ where: { tenantId: user.tenantId, deleted: false } }),
       this.prisma.document.count({ where: { tenantId: user.tenantId, deleted: false } }),
+      this.queue.failedJobs(10),
     ]);
-    return { queue: stats, sources, documents: docs };
+    return { queue: stats, sources, documents: docs, failed };
+  }
+
+  @Get("metrics")
+  async metrics(@CurrentUser() user: AuthenticatedUser) {
+    const [counts, feedback, recentErrors] = await Promise.all([
+      this.prisma.aIRequest.count({ where: { tenantId: user.tenantId } }),
+      this.prisma.feedback.groupBy({ by: ["helpful"], where: { tenantId: user.tenantId }, _count: true }),
+      this.prisma.auditLog.findMany({
+        where: { tenantId: user.tenantId, action: "query.failed" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+    ]);
+    return { queries: counts, feedback, recentErrors };
   }
 }
