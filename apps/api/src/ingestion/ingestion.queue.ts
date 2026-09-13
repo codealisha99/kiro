@@ -81,6 +81,19 @@ export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
       "delayed",
     );
   }
+
+  async failedJobs(limit = 20) {
+    if (!this.queue) return [];
+    const jobs = await this.queue.getFailed(0, limit - 1);
+    return jobs.map((j) => ({
+      id: j.id,
+      name: j.name,
+      data: j.data,
+      failedReason: j.failedReason,
+      attemptsMade: j.attemptsMade,
+      timestamp: j.timestamp,
+    }));
+  }
 }
 
 export type IngestJob = Job<{ versionId: string }>;

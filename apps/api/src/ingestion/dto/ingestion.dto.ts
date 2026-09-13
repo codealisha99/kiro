@@ -38,3 +38,12 @@ export class IngestDocumentDto {
   @IsOptional()
   acl?: AclGrantDto[];
 }
+
+export class RevokeAclDto {
+  @IsIn(["user", "role", "group"])
+  principalType!: string;
+
+  @IsString()
+  @MinLength(1)
+  principalId!: string;
+}

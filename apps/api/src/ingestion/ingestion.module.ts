@@ -7,10 +7,11 @@ import { IngestionProcessor } from "./ingestion.processor";
 import { SourcesController } from "./sources.controller";
 import { DocumentsController } from "./documents.controller";
 import { UsersModule } from "../users/users.module";
+import { ConnectorsModule } from "../connectors/connectors.module";
 
 @Global()
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, ConnectorsModule],
   controllers: [SourcesController, DocumentsController],
   providers: [
     IngestionService,

@@ -16,6 +16,7 @@ import { IngestQueueService } from "./ingestion.queue";
 import { ParserService } from "./parser.service";
 import { DEMO_DOCUMENTS, DEMO_SOURCE_NAME } from "./demo-corpus";
 import { UsersService } from "../users/users.service";
+import { StorageService } from "../storage/storage.service";
 
 type ClassificationName = "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
 
@@ -44,6 +45,7 @@ export class IngestionService {
     private readonly queue: IngestQueueService,
     private readonly parser: ParserService,
     private readonly users: UsersService,
+    private readonly storage: StorageService,
   ) {}
 
   // ---- Sources ----
@@ -171,6 +173,63 @@ export class IngestionService {
     };
   }
 
+  async listVersions(user: AuthenticatedUser, id: string) {
+    const doc = await this.prisma.document.findFirst({
+      where: { ...this.visibleWhere(user), id },
+      select: { id: true },
+    });
+    if (!doc) throw new NotFoundException("Document not found");
+    const versions = await this.prisma.documentVersion.findMany({
+      where: { documentId: id },
+      orderBy: { version: "desc" },
+    });
+    return versions.map((v) => ({
+      id: v.id,
+      documentId: v.documentId,
+      version: v.version,
+      contentHash: v.contentHash,
+      filename: v.filename,
+      approvalStatus: v.approvalStatus.toLowerCase(),
+      createdAt: v.createdAt,
+    }));
+  }
+
+  async deleteDocument(user: AuthenticatedUser, id: string) {
+    const doc = await this.prisma.document.findFirst({
+      where: { tenantId: user.tenantId, id, deleted: false },
+    });
+    if (!doc) throw new NotFoundException("Document not found");
+    // Only owner or admin/manager with explicit access can delete. Simplified: owner or ADMIN role.
+    if (doc.ownerId !== user.id && user.role !== "admin") {
+      // Check ACL admin permission
+      const acl = await this.prisma.documentACL.findFirst({
+        where: { documentId: id, principalType: PrincipalType.USER, principalId: user.id, permission: Permission.ADMIN },
+      });
+      if (!acl) throw new NotFoundException("Document not found");
+    }
+    await this.prisma.document.update({ where: { id }, data: { deleted: true } });
+    return { ok: true };
+  }
+
+  async revokeAccess(
+    user: AuthenticatedUser,
+    documentId: string,
+    principalType: string,
+    principalId: string,
+  ) {
+    const doc = await this.prisma.document.findFirst({
+      where: { tenantId: user.tenantId, id: documentId, deleted: false },
+    });
+    if (!doc) throw new NotFoundException("Document not found");
+    if (doc.ownerId !== user.id && user.role !== "admin") {
+      throw new NotFoundException("Document not found");
+    }
+    await this.prisma.documentACL.deleteMany({
+      where: { documentId, principalType: this.normalizePrincipalType(principalType), principalId },
+    });
+    return { ok: true };
+  }
+
   /**
    * Manual ingest: idempotent document upsert keyed on (tenant, source, external id).
    * Documents + chunks are created synchronously so records are queryable;
@@ -236,6 +295,9 @@ export class IngestionService {
     }
 
     const nextVersion = (latestVersion?.version ?? 0) + 1;
+    // Persist original to S3/local storage (fire-and-forget, non-blocking on error)
+    const storageKey = `${user.tenantId}/${document.id}/v${nextVersion}/${input.filename ?? "document.txt"}`;
+    await this.storage.put(storageKey, input.content).catch(() => undefined);
     const version = await this.prisma.documentVersion.create({
       data: {
         documentId: document.id,
