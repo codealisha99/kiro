@@ -335,7 +335,7 @@ Do these in the browser at http://localhost:3000.
 - SSO / OIDC
 - Grafana / OpenTelemetry
 - PRD bars: Recall@5 ≥ 85%, Precision@5 ≥ 75%, citation ≥ 95%
-- CI on `master` (workflow file listens to `main`)
+- CI on `main` (canonical branch; the old `master` branch was removed)
 
 ---
 
