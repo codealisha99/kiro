@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/kiro?stringtype=unspecified}
+    username: ${DB_USER:kiro}
+    password: ${DB_PASSWORD:kiro}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+
+server:
+  port: ${PORT:3001}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:3600}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
+  ai-service-url: ${AI_SERVICE_URL:http://localhost:8000}
+  storage-dir: ${STORAGE_DIR:/tmp/kiro-storage}
+  storage-driver: ${STORAGE_DRIVER:local}
+  chunk-size: ${CHUNKER_CHUNK_SIZE:1000}
+  chunk-overlap: ${CHUNKER_OVERLAP:200}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
