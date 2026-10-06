@@ -31,12 +31,16 @@ services:
       timeout: 5s
       retries: 10
 
+  # Legacy NestJS backend — REFERENCE ONLY (pre-migration implementation).
+  # Not started by default. Run explicitly with:
+  #   docker compose --profile node up --build postgres redis ai api web
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: kiro-api
     restart: unless-stopped
+    profiles: ["node"]
     ports:
       - "3001:3001"
     environment:
@@ -50,16 +54,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-  # Spring Boot backend (Java 21). Drop-in replacement for `api` (NestJS):
-  #   docker compose --profile java up --build postgres redis ai api-java web
-  # The default `docker compose up` still starts the NestJS `api` for reference.
+  # Spring Boot backend (Java 21) — DEFAULT API. Starts with plain `docker compose up`.
   api-java:
     build:
       context: .
       dockerfile: apps/api-java/Dockerfile
     container_name: kiro-api-java
     restart: unless-stopped
-    profiles: ["java"]
     ports:
       - "3001:3001"
     environment:
@@ -70,6 +71,12 @@ services:
       JWT_SECRET: "${JWT_SECRET:-dev-secret-change-me}"
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
       PORT: "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,7 +116,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: "http://localhost:3001"
     depends_on:
-      api:
+      api-java:
         condition: service_started
 
 volumes:
