@@ -13,3 +13,7 @@ coverage/
 __pycache__/
 *.pyc
 *.tsbuildinfo
+# Java / Maven
+target/
+*.jar
+*.class

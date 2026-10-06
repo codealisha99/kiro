@@ -50,6 +50,31 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+  # Spring Boot backend (Java 21). Drop-in replacement for `api` (NestJS):
+  #   docker compose --profile java up --build postgres redis ai api-java web
+  # The default `docker compose up` still starts the NestJS `api` for reference.
+  api-java:
+    build:
+      context: .
+      dockerfile: apps/api-java/Dockerfile
+    container_name: kiro-api-java
+    restart: unless-stopped
+    profiles: ["java"]
+    ports:
+      - "3001:3001"
+    environment:
+      SPRING_PROFILES_ACTIVE: "local"
+      DATABASE_URL: "postgresql://kiro:kiro@postgres:5432/kiro?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      AI_SERVICE_URL: "http://ai:8000"
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-change-me}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+      PORT: "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       ai:
         condition: service_started
 

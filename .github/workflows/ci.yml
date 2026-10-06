@@ -47,3 +47,35 @@ jobs:
           python-version: "3.11"
       - run: pip install -r apps/ai/requirements.txt
       - run: python -m py_compile apps/ai/app/*.py
+
+  java:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: kiro
+          POSTGRES_PASSWORD: kiro
+          POSTGRES_DB: kiro
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U kiro -d kiro"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: mvn -f apps/api-java/pom.xml verify
+      - run: docker build -f apps/api-java/Dockerfile -t kiro-api-java:ci .
