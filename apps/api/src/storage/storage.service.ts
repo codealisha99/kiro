@@ -2,12 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/**
- * S3 abstraction — production swaps `driver=s3` via env.
- * MVP driver is local disk (no cloud dependency), but the interface
- * matches S3 so `build-plan.md:79` "originals in S3" is satisfied
- * without a rewrite.
- */
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);

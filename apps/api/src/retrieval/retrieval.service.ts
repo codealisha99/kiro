@@ -36,11 +36,6 @@ interface RawRow {
 const SEMANTIC_LIMIT = 10;
 const KEYWORD_LIMIT = 10;
 
-/**
- * Hybrid retrieval (pgvector cosine + PostgreSQL FTS) with a mandatory
- * query-time permission filter. The permission predicate is the security
- * enforcement point: an unauthorized chunk can never leave this service.
- */
 @Injectable()
 export class RetrievalService {
   constructor(
@@ -137,11 +132,6 @@ export class RetrievalService {
     return rows.map((r) => this.toChunk(r));
   }
 
-  /**
-   * Visibility rule (fail-closed):
-   *   PUBLIC / INTERNAL — any user in the tenant
-   *   CONFIDENTIAL / RESTRICTED — owner or an explicit USER/ROLE ACL grant
-   */
   aclFilter(user: AuthenticatedUser) {
     const roleKey = user.role.toUpperCase();
     return Prisma.sql`

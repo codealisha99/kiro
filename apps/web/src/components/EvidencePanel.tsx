@@ -1,5 +1,7 @@
 "use client";
 
+import { Badge, Button } from "@/components/ui";
+
 import type { CitationSource, DocumentDetail } from "@kiro/shared";
 
 export default function EvidencePanel({
@@ -16,7 +18,9 @@ export default function EvidencePanel({
   if (loading) {
     return (
       <div className="scroll">
-        <p className="spinner">Opening the source…</p>
+        <p className="spinner" role="status">
+          Opening the source…
+        </p>
       </div>
     );
   }
@@ -24,8 +28,8 @@ export default function EvidencePanel({
   if (!document) {
     return (
       <div className="scroll">
-        <div className="empty-ask" style={{ margin: "24px 0" }}>
-          <h2 style={{ fontSize: 26 }}>The ledger is empty</h2>
+        <div className="empty-ask evidence-empty">
+          <h2>The ledger is empty</h2>
           <p>
             Click a numbered citation in an answer, or open a document from the
             library. The exact passage appears here.
@@ -43,16 +47,14 @@ export default function EvidencePanel({
   return (
     <div className="scroll">
       <div className="row" style={{ marginBottom: 10 }}>
-        <span className={`badge ${document.classification}`}>
+        <Badge className={document.classification}>
           {document.classification}
-        </span>
-        <button className="btn ghost small" onClick={onClose}>
+        </Badge>
+        <Button variant="secondary" size="small" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
-      <h3 style={{ fontSize: 20, letterSpacing: "-0.03em", marginBottom: 6 }}>
-        {document.title}
-      </h3>
+      <h3 className="evidence-title">{document.title}</h3>
       <p className="muted" style={{ marginBottom: 16 }}>
         {document.filename ?? "Pasted text"} · v{document.versionCount} ·{" "}
         {new Date(document.updatedAt).toLocaleDateString()}

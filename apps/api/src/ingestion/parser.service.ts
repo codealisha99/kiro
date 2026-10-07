@@ -9,10 +9,6 @@ export interface ParsedDocument {
 
 const MAX_CHARS = 400_000;
 
-/**
- * Turns uploaded files into normalized text the chunker can index.
- * PDF, Markdown, plain text, and CSV are supported for the MVP.
- */
 @Injectable()
 export class ParserService {
   async parse(
@@ -34,8 +30,6 @@ export class ParserService {
         "Could not extract any text from that file. Try a PDF, Markdown, text, or CSV file.",
       );
     }
-    // Defensive: evidence will be wrapped at query time, but flagging early helps audit.
-    // We don't reject injection payloads — we index them as data.
     trimmed = trimmed.slice(0, MAX_CHARS);
 
     return {
@@ -53,8 +47,6 @@ export class ParserService {
     if (ext === "csv" || mime === "text/csv" || mime === "application/vnd.ms-excel") {
       return csvToProse(buffer.toString("utf8"));
     }
-    // XLSX/DOCX are ZIP-based OOXML; without heavy deps we extract raw text
-    // by stripping XML tags. This covers MVP spreadsheets/docs without needing LibreOffice.
     if (ext === "xlsx" || mime.includes("spreadsheetml") || mime.includes("excel")) {
       return extractOoxmlText(buffer);
     }
@@ -128,13 +120,9 @@ function splitCsvLine(line: string): string[] {
 }
 
 function extractOoxmlText(buffer: Buffer): string {
-  // OOXML is a ZIP; we do a best-effort text extraction by pulling all
-  // human-readable strings between XML tags, joining sharedStrings/sheetData.
   const raw = buffer.toString("utf8");
-  // Extract text nodes like <t>value</t> and <v>value</v>
   const matches = [...raw.matchAll(/<t[^>]*>([^<]+)<\/t>/g)].map((m) => m[1]);
   if (matches.length) return matches.join(" ");
-  // Fallback: strip XML tags and collapse whitespace
   return raw
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")

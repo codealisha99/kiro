@@ -36,7 +36,6 @@ export interface ManualIngestInput {
   externalId?: string;
 }
 
-/** Business logic for the knowledge layer: sources + documents + ingestion. */
 @Injectable()
 export class IngestionService {
   constructor(
@@ -47,9 +46,6 @@ export class IngestionService {
     private readonly users: UsersService,
     private readonly storage: StorageService,
   ) {}
-
-  // ---- Sources ----
-
   async listSources(user: AuthenticatedUser) {
     const sources = await this.prisma.source.findMany({
       where: { tenantId: user.tenantId, deleted: false },
@@ -105,8 +101,6 @@ export class IngestionService {
     return { ok: true };
   }
 
-  // ---- Documents ----
-
   async listDocuments(user: AuthenticatedUser) {
     const docs = await this.prisma.document.findMany({
       where: this.visibleWhere(user),
@@ -122,6 +116,30 @@ export class IngestionService {
       updatedAt: d.updatedAt,
       versionCount: d._count.versions,
     }));
+  }
+
+  async getEmbedStatus(user: AuthenticatedUser) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ total: bigint; embedded: bigint }>
+    >`
+      SELECT
+        COUNT(*)::bigint AS total,
+        COUNT(dc.embedding)::bigint AS embedded
+      FROM document_chunks dc
+      JOIN document_versions dv ON dv.id = dc."documentVersionId"
+      JOIN documents d ON d.id = dv."documentId"
+      WHERE d."tenantId" = ${user.tenantId}
+        AND d.deleted = false
+    `;
+    const totalChunks = Number(rows[0]?.total ?? 0);
+    const embeddedChunks = Number(rows[0]?.embedded ?? 0);
+    const pendingChunks = Math.max(0, totalChunks - embeddedChunks);
+    return {
+      totalChunks,
+      embeddedChunks,
+      pendingChunks,
+      ready: pendingChunks === 0,
+    };
   }
 
   async getDocument(user: AuthenticatedUser, id: string) {
@@ -199,9 +217,7 @@ export class IngestionService {
       where: { tenantId: user.tenantId, id, deleted: false },
     });
     if (!doc) throw new NotFoundException("Document not found");
-    // Only owner or admin/manager with explicit access can delete. Simplified: owner or ADMIN role.
     if (doc.ownerId !== user.id && user.role !== "admin") {
-      // Check ACL admin permission
       const acl = await this.prisma.documentACL.findFirst({
         where: { documentId: id, principalType: PrincipalType.USER, principalId: user.id, permission: Permission.ADMIN },
       });
@@ -230,11 +246,6 @@ export class IngestionService {
     return { ok: true };
   }
 
-  /**
-   * Manual ingest: idempotent document upsert keyed on (tenant, source, external id).
-   * Documents + chunks are created synchronously so records are queryable;
-   * embeddings land asynchronously via the BullMQ worker queue.
-   */
   async ingestManualDocument(user: AuthenticatedUser, input: ManualIngestInput) {
     if (!input.title.trim()) {
       throw new ConflictException("title is required");
@@ -295,7 +306,6 @@ export class IngestionService {
     }
 
     const nextVersion = (latestVersion?.version ?? 0) + 1;
-    // Persist original to S3/local storage (fire-and-forget, non-blocking on error)
     const storageKey = `${user.tenantId}/${document.id}/v${nextVersion}/${input.filename ?? "document.txt"}`;
     await this.storage.put(storageKey, input.content).catch(() => undefined);
     const version = await this.prisma.documentVersion.create({
@@ -404,12 +414,6 @@ export class IngestionService {
     };
   }
 
-  // ---- Internals ----
-
-  /**
-   * Same visibility rule as retrieval: PUBLIC/INTERNAL for the tenant,
-   * confidential/restricted only for owner or explicit ACL.
-   */
   visibleWhere(user: AuthenticatedUser) {
     const roleKey = user.role.toUpperCase();
     return {

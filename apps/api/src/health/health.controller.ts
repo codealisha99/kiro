@@ -42,7 +42,6 @@ export class HealthController {
       this.checkWithTimeout(() => this.prisma.$queryRaw`SELECT 1`),
       this.checkWithTimeout(() => this.redis.getClient().ping().then(() => undefined)),
     ]);
-    // AI is optional — degraded but not hard-down if embedding LLM not configured
     const ai = await this.checkWithTimeout(() => this.ai.status().then(() => undefined), 3000);
     return this.buildResponse({ db, redis, ai });
   }

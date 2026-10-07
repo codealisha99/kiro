@@ -1,7 +1,3 @@
-// Kiro — Prisma schema
-// Covers PRD knowledge object model + query data model + Phase 1 identity.
-// Docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,8 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ---- Phase 1: identity & tenants ----
 
 model Tenant {
   id        String   @id @default(cuid())
@@ -27,7 +21,7 @@ model User {
   tenantId  String
   email     String   @unique
   name      String?
-  password  String? // bcrypt hash (null when SSO/OIDC managed)
+  password  String?
   role      Role     @default(EMPLOYEE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -45,7 +39,6 @@ enum Role {
   ADMIN
 }
 
-// ---- Session (JWT/session store for auth) ----
 model Session {
   id        String   @id @default(cuid())
   userId    String
@@ -58,8 +51,6 @@ model Session {
   @@index([userId])
   @@map("sessions")
 }
-
-// ---- Knowledge object model (PRD section 8) ----
 
 model Source {
   id         String   @id @default(cuid())
@@ -195,8 +186,6 @@ enum Permission {
   ADMIN
 }
 
-// ---- Query data model (PRD section 9) ----
-
 model Conversation {
   id        String   @id @default(cuid())
   tenantId  String
@@ -262,7 +251,6 @@ model ResponseEvidence {
   @@map("response_evidence")
 }
 
-// ---- Audit log (PRD section 7.5) ----
 model AuditLog {
   id               String   @id @default(cuid())
   tenantId         String
@@ -283,7 +271,6 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// ---- User feedback on answers ----
 model Feedback {
   id        String   @id @default(cuid())
   tenantId  String

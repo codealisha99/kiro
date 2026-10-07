@@ -1,23 +1,7 @@
-"""
-Provider-independent LLM Gateway (PRD section 6.7).
-
-The backend/AI service must never directly depend on a single LLM provider.
-This module is the abstraction seam:
-
-    LLM Gateway
-      |
-      +-- Provider A
-      +-- Provider B
-
-Responsibilities: model selection, token limits, timeout, retry,
-fallback, cost tracking, model version tracking.
-"""
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from app.clients import OpenAICompatClient
-
 
 @dataclass
 class GenerationRequest:
@@ -27,7 +11,6 @@ class GenerationRequest:
     temperature: float = 0.0
     system_prompt: str | None = None
 
-
 @dataclass
 class GenerationResult:
     text: str
@@ -35,9 +18,7 @@ class GenerationResult:
     model_version: str
     usage: dict[str, int]
 
-
 class LLMProvider(ABC):
-    """Contract every provider adapter implements."""
 
     name: str
 
@@ -45,9 +26,7 @@ class LLMProvider(ABC):
     def generate(self, request: GenerationRequest) -> GenerationResult:
         ...
 
-
 class OpenAICompatibleProvider(LLMProvider):
-    """Adapter for any OpenAI-compatible /chat/completions endpoint."""
 
     def __init__(
         self,
@@ -82,19 +61,17 @@ class OpenAICompatibleProvider(LLMProvider):
             usage=usage,
         )
 
-
 class LLMGateway:
-    """Routes generation requests to an available provider with fallback."""
 
     def __init__(self, providers: list[LLMProvider], default_model: str) -> None:
         self._providers = {p.name: p for p in providers}
         self._default_model = default_model
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
-        # Prefer the explicitly requested provider, otherwise the default.
+
         for name in self._providers:
             try:
                 return self._providers[name].generate(request)
-            except Exception:  # noqa: BLE001 - fallback across providers
+            except Exception:
                 continue
         raise RuntimeError("All LLM providers failed")

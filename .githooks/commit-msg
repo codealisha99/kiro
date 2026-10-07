@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+message_file="$1"
+temp_file=$(mktemp)
+trap 'rm -f "$temp_file"' EXIT HUP INT TERM
+awk 'tolower($0) !~ /^co-authored-by:/' "$message_file" > "$temp_file"
+cat "$temp_file" > "$message_file"

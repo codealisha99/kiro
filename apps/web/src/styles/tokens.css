@@ -1,0 +1,107 @@
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --color-canvas: #e3e7df;
+  --color-surface: #f2f4ee;
+  --color-panel: #fafbf7;
+  --color-raised: #ffffff;
+  --color-text: #172b29;
+  --color-muted: #596760;
+  --color-border: #c4cdc2;
+  --color-accent: #0a5c63;
+  --color-accent-hover: #08484e;
+  --color-accent-soft: #dcebea;
+  --color-on-accent: #ffffff;
+  --color-ink-hover: #29413d;
+  --color-on-ink: #fafbf7;
+  --color-marker: #ad4121;
+  --color-marker-hover: #8f3419;
+  --color-marker-soft: #f5ddd0;
+  --color-success: #246444;
+  --color-success-soft: #e2eee4;
+  --color-warning: #805411;
+  --color-warning-soft: #fff1da;
+  --color-danger: #a12f35;
+  --color-danger-hover: #84262b;
+  --color-overlay: rgb(8 14 22 / 45%);
+  --color-cover-text: #fafbf7;
+  --color-cover-muted: #d1d9d1;
+  --color-cover-accent: #9fd3d4;
+  --color-danger-soft: #f8e7e7;
+  --font-body: Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-editorial: "IBM Plex Serif", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-display: clamp(2.5rem, 5vw, 4.5rem);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-panel: 0 12px 32px rgb(23 43 41 / 7%);
+  --shadow-overlay: 0 24px 60px rgb(8 14 22 / 25%);
+  --content-width: 1120px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-canvas: #14201e;
+  --color-surface: #1c2b28;
+  --color-panel: #22332f;
+  --color-raised: #293d37;
+  --color-text: #eef2e9;
+  --color-muted: #b2c2b7;
+  --color-border: #455b50;
+  --color-accent: #8accca;
+  --color-accent-hover: #a7dcd9;
+  --color-accent-soft: #254340;
+  --color-on-accent: #142b29;
+  --color-ink-hover: #d8e3d5;
+  --color-on-ink: #14201e;
+  --color-marker: #f0a07c;
+  --color-marker-hover: #ffc2a3;
+  --color-marker-soft: #49352b;
+  --color-success: #a3d3ae;
+  --color-success-soft: #263e2e;
+  --color-warning: #edc580;
+  --color-warning-soft: #433924;
+  --color-danger: #f2a4a8;
+  --color-danger-hover: #ffc1c4;
+  --color-danger-soft: #462b2e;
+  --shadow-panel: 0 12px 32px rgb(0 0 0 / 18%);
+}
+
+:root,
+[data-theme] {
+  /* Compatibility aliases keep the existing workspace on the same system. */
+  --ink: var(--color-text);
+  --canvas: var(--color-canvas);
+  --paper: var(--color-surface);
+  --panel: var(--color-panel);
+  --signal: var(--color-accent);
+  --signal-soft: var(--color-accent-soft);
+  --marker: var(--color-marker);
+  --rule: var(--color-border);
+  --mute: var(--color-muted);
+  --danger: var(--color-danger);
+  --ok: var(--color-success);
+  --shadow: var(--shadow-panel);
+}

@@ -11,8 +11,7 @@ describe("fuseRrf", () => {
     const singleOnlyD = scores.get("d")!;
     expect(inBoth).toBeGreaterThan(singleOnlyB);
     expect(inBoth).toBeGreaterThan(singleOnlyD);
-    expect(singleOnlyB).toBeGreaterThan(singleOnlyD); // higher rank wins
-    // a (rank 0 + 1) beats c (rank 2 + 0)
+    expect(singleOnlyB).toBeGreaterThan(singleOnlyD);
     expect(scores.get("a")).toBeGreaterThan(scores.get("c")!);
   });
 });
@@ -30,7 +29,6 @@ describe("topFused", () => {
     ]);
     const top = topFused(items, scores, 2);
     expect(top.map((t) => t.name)).toEqual(["A", "C"]);
-    // 'a' ranked 0 in list 1 → beats 'c' ranked 2 in list 1 despite 'c' topping list 2
   });
 
   it("handles empty results", () => {

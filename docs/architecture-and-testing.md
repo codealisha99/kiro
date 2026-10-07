@@ -132,7 +132,7 @@ Drive / Slack / CRM connectors exist as modules (`apps/api/src/connectors`) but 
 
 | Path | What it is |
 |---|---|
-| `auth/` | Register, login, logout, `/me`. JWT + bcrypt |
+| `auth/` | Register, login, logout, `/me`. JWT + bcrypt; logout clears Redis session and JWT strategy rejects revoked tokens |
 | `users/` | List / invite, tenant-scoped |
 | `common/guards` | JWT + role guards (fail closed) |
 | `common/throttle.guard.ts` | Rate limit on `/brain/query` and uploads |
@@ -188,6 +188,7 @@ All JSON routes except health/metrics expect `Authorization: Bearer <token>` unl
 | GET/POST | `/documents` | |
 | POST | `/documents/upload` | multipart |
 | POST | `/documents/demo` | seed corpus |
+| GET | `/documents/embed-status` | embedding progress for tenant |
 | GET | `/documents/:id` | |
 | GET | `/documents/:id/versions` | |
 | DELETE | `/documents/:id` | owner/admin |
@@ -211,16 +212,16 @@ All JSON routes except health/metrics expect `Authorization: Bearer <token>` unl
 ```bash
 cp .env.example .env
 # put a real AI_LLM_API_KEY in .env if you want embeddings + answers
-docker compose up -d postgres redis
-pnpm install
-pnpm --filter @kiro/api prisma:generate
-pnpm --filter @kiro/api prisma:migrate
-pnpm dev
+pnpm infra          # docker compose up -d postgres redis
+pnpm setup          # install, prisma migrate deploy, AI pip install
+pnpm dev            # web + api + ai
 ```
 
 - Web: http://localhost:3000
 - API: http://localhost:3001
-- AI: http://localhost:8000 (start separately if you are not using the AI compose service)
+- AI: http://localhost:8000
+
+`pnpm infra` starts only postgres and redis so ports do not clash with `pnpm dev`. For an all-in-one Docker run use `docker compose up -d --build` instead (API applies migrations on boot) and do not also run `pnpm dev`.
 
 Without `AI_LLM_API_KEY`, ingest still stores text. Semantic search and LLM answers degrade; keyword search and extractive fallback still run.
 
@@ -231,6 +232,16 @@ If you changed `docker-compose` credentials to `kiro`/`kiro` but an old volume s
 ## 9. What to test
 
 ### 9.1 Automated unit tests
+
+Run the workspace checks before submitting a change. Frontend lint uses ESLint
+with the Next.js and TypeScript rules and fails on warnings; CI runs it alongside
+typechecking and the production build.
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm build
+```
 
 ```bash
 pnpm --filter @kiro/api test
@@ -248,6 +259,9 @@ pnpm --filter @kiro/api test
 | `retrieval.service.spec.ts` | ACL SQL shape |
 | `prompt-sanitize.spec.ts` | Evidence wrapping |
 | `brain.service.spec.ts` | Unknown, answered, fail-closed on retrieval error |
+| `ai-gateway.service.spec.ts` | AI response validation, complete 1536-dimensional embedding batches, provider field mapping, upstream failures |
+| `throttle.guard.spec.ts` | Rate limits by user and endpoint, exact window reset, expired bucket cleanup |
+| `ingestion.dto.spec.ts` | Nested ACL validation, malformed grants, unexpected fields |
 
 These do not start Postgres or call a real LLM. They do not prove Recall@5 or citation accuracy.
 

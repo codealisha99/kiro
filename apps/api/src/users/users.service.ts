@@ -14,7 +14,6 @@ const ROLE_MAP: Record<string, Role> = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Tenant-scoped list — every query is filtered by the caller's tenant. */
   async listByTenant(user: AuthenticatedUser) {
     return this.prisma.user.findMany({
       where: { tenantId: user.tenantId },

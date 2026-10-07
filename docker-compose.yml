@@ -57,8 +57,8 @@ services:
   # Spring Boot backend (Java 21) — DEFAULT API. Starts with plain `docker compose up`.
   api-java:
     build:
-      context: .
-      dockerfile: apps/api-java/Dockerfile
+      context: ./apps/api-java
+      dockerfile: Dockerfile
     container_name: kiro-api-java
     restart: unless-stopped
     ports:

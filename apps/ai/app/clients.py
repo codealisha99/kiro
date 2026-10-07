@@ -1,20 +1,11 @@
-"""Minimal OpenAI-compatible HTTP client (httpx).
-
-Both chat completions and embeddings are available through the same
-endpoint shape, so a single client serves the LLM gateway and the
-embedding provider.
-"""
-
 from __future__ import annotations
 
 from typing import Any
 
 import httpx
 
-
 class OpenAICompatError(RuntimeError):
-    """Raised when an upstream provider returns an error or times out."""
-
+    pass
 
 class OpenAICompatClient:
     def __init__(self, base_url: str, api_key: str, timeout_seconds: float = 90.0) -> None:
@@ -40,7 +31,7 @@ class OpenAICompatClient:
                 )
                 resp.raise_for_status()
                 return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:  # network + non-JSON responses
+            except (httpx.HTTPError, ValueError) as exc:
                 last_error = exc
                 if attempt < retries:
                     continue

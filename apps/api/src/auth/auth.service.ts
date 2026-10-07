@@ -13,7 +13,7 @@ import { RedisService } from "../redis/redis.service";
 import { LoginDto, RegisterDto } from "./dto/auth.dto";
 import * as bcrypt from "bcryptjs";
 
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 @Injectable()
 export class AuthService {
@@ -44,7 +44,7 @@ export class AuthService {
         email: dto.email.toLowerCase(),
         name: dto.name,
         password: passwordHash,
-        role: Role.ADMIN, // first user bootstraps the tenant as admin
+        role: Role.ADMIN,
       },
     });
 

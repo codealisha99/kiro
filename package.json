@@ -18,6 +18,9 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "infra": "docker compose up -d postgres redis",
+    "db:setup": "pnpm --filter @kiro/api prisma:generate && pnpm --filter @kiro/api prisma:deploy",
+    "setup": "pnpm install && pnpm db:setup && pnpm --filter @kiro/ai run setup",
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck"

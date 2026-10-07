@@ -31,7 +31,6 @@ export class ConversationsService {
     });
   }
 
-  /** Single conversation with its Q&A messages (tenant + owner scoped). */
   async get(user: AuthenticatedUser, id?: string) {
     if (!id) {
       return null;

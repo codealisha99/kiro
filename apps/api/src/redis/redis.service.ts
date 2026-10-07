@@ -22,12 +22,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.logger.log("Disconnected from Redis");
   }
 
-  /** Raw ioredis client for advanced usage. */
   getClient(): Redis {
     return this.client;
   }
 
-  /** Convenience wrapper for session-style TTL-safe writes. */
   async set(key: string, value: string, ttlSeconds?: number) {
     if (ttlSeconds) {
       return this.client.set(key, value, "EX", ttlSeconds);

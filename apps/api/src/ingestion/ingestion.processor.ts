@@ -5,7 +5,6 @@ import type { IngestJob } from "./ingestion.queue";
 
 const EMBED_BATCH_SIZE = 24;
 
-/** Runs the async half of ingestion: embedding stored chunks into pgvector. */
 @Injectable()
 export class IngestionProcessor {
   private readonly logger = new Logger(IngestionProcessor.name);
@@ -32,7 +31,6 @@ export class IngestionProcessor {
       ORDER BY "id" ASC
     `;
 
-    // Keyword search already covers these; nothing to embed.
     if (rows.length === 0) {
       return { embedded: 0 };
     }

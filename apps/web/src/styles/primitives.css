@@ -1,0 +1,228 @@
+/* Shared control styles; page composition belongs in page stylesheets. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.badge.confidential,
+.badge.restricted {
+  border-color: var(--marker);
+  color: var(--marker);
+}
+
+.badge.public {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.badge.unknown,
+.badge.ambiguous,
+.badge.partial {
+  border-color: var(--marker);
+  color: var(--marker);
+}
+
+.badge.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn {
+  background: var(--ink);
+  color: var(--color-on-ink);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  line-height: 1.5;
+  border: 1px solid transparent;
+  font-weight: 550;
+}
+
+.btn:hover {
+  background: var(--color-ink-hover);
+}
+
+.btn.signal {
+  background: var(--signal);
+  color: var(--color-on-accent);
+}
+
+.btn.signal:hover {
+  background: var(--color-accent-hover);
+}
+
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+
+.btn.ghost:hover {
+  border-color: var(--ink);
+  background: var(--color-raised);
+}
+
+.btn.small {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.btn.block {
+  width: 100%;
+}
+
+.btn {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.btn.small {
+  min-height: 32px;
+}
+.btn:disabled {
+  pointer-events: none;
+}
+.btn.danger {
+  background: var(--danger);
+  color: var(--color-on-accent);
+}
+.btn.danger:hover {
+  background: var(--color-danger-hover);
+}
+.input {
+  width: 100%;
+  min-height: 42px;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--color-raised);
+  color: var(--ink);
+}
+.input::placeholder {
+  color: var(--mute);
+  opacity: 1;
+}
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+textarea.input {
+  min-height: 100px;
+  resize: vertical;
+}
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+.field label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.field-error {
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+.card {
+  padding: var(--space-6);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.alert {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.tone-info {
+  color: var(--signal);
+}
+.tone-success {
+  color: var(--ok);
+}
+.tone-warning {
+  color: var(--color-warning);
+}
+.tone-danger {
+  color: var(--danger);
+}
+.alert.tone-info {
+  background: var(--signal-soft);
+}
+.alert.tone-success {
+  background: var(--color-success-soft);
+}
+.alert.tone-warning {
+  background: var(--color-warning-soft);
+}
+.alert.tone-danger {
+  background: var(--color-danger-soft);
+}
+.badge.tone-info,
+.badge.tone-success,
+.badge.tone-warning,
+.badge.tone-danger {
+  border-color: currentColor;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.field .muted {
+  font-size: var(--text-xs);
+}
+.form label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  tab-size: 2;
+}
+
+.input[type="file"] {
+  padding: var(--space-2);
+  font-size: var(--text-xs);
+}
+.input::file-selector-button {
+  margin-right: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}

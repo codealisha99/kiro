@@ -7,6 +7,7 @@ import type {
   DemoSeedResponse,
   DocumentDetail,
   DocumentListItem,
+  EmbedStatus,
   IngestDocumentResponse,
   InviteUserRequest,
   LoginRequest,
@@ -52,14 +53,13 @@ async function readError(res: Response): Promise<string> {
       detail = data.message;
     }
   } catch {
-    /* ignore non-JSON error bodies */
   }
   return detail;
 }
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {},
+  options: { method?: string; body?: unknown } = {}
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -139,6 +139,7 @@ export const api = {
     return requestForm<IngestDocumentResponse>("/documents/upload", form);
   },
   seedDemo: () => request<DemoSeedResponse>("/documents/demo", { method: "POST" }),
+  embedStatus: () => request<EmbedStatus>("/documents/embed-status"),
 
   conversations: () => request<ConversationDto[]>("/conversations"),
   conversation: (id: string) => request<ConversationDetail>(`/conversations/${id}`),

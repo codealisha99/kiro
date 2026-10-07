@@ -34,7 +34,6 @@ export class FeedbackController {
   @Post()
   @HttpCode(HttpStatus.OK)
   async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: FeedbackDto) {
-    // Must reference a request the user actually made (tenant + owner scoped).
     const request = await this.prisma.aIRequest.findFirst({
       where: { id: dto.requestId, tenantId: user.tenantId, userId: user.id },
     });

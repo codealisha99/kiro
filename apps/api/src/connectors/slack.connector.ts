@@ -1,7 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { Connector, ConnectorDocument } from "./connector.interface";
 
-/** Slack connector — MVP stub. Production: slack Web API conversations.history + events. */
 @Injectable()
 export class SlackConnector implements Connector {
   readonly type = "slack" as const;

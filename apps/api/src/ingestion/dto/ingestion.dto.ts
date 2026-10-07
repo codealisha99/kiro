@@ -1,4 +1,5 @@
-import { IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { Type } from "class-transformer";
+import { IsArray, IsIn, IsOptional, IsString, MinLength, ValidateNested } from "class-validator";
 
 export class CreateSourceDto {
   @IsIn(["google_drive", "slack", "crm", "manual"])
@@ -36,6 +37,9 @@ export class IngestDocumentDto {
   classification?: string;
 
   @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AclGrantDto)
   acl?: AclGrantDto[];
 }
 
