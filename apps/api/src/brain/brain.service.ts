@@ -195,8 +195,6 @@ export class BrainService {
     }
   }
 
-  // ---- Internals ----
-
   private async saveResponse(
     request: { id: string },
     answer: string,

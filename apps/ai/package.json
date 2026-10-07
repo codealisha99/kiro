@@ -1,0 +1,10 @@
+{
+  "name": "@kiro/ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "python3 -m pip install -r requirements.txt",
+    "dev": "python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "start": "python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  }
+}

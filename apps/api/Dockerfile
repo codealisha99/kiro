@@ -7,5 +7,6 @@ COPY apps/api ./apps/api
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @kiro/api prisma:generate
 RUN pnpm --filter @kiro/api build
+RUN chmod +x apps/api/docker-entrypoint.sh
 EXPOSE 3001
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["apps/api/docker-entrypoint.sh"]

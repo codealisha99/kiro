@@ -40,6 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @kiro/api prisma:generate
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm build
       - run: pnpm --filter @kiro/api test
       - uses: actions/setup-python@v5

@@ -23,10 +23,14 @@ import { IngestDocumentDto, RevokeAclDto } from "./dto/ingestion.dto";
 @UseGuards(JwtAuthGuard)
 export class DocumentsController {
   constructor(private readonly ingestion: IngestionService) {}
-
   @Get()
   list(@CurrentUser() user: AuthenticatedUser) {
     return this.ingestion.listDocuments(user);
+  }
+
+  @Get("embed-status")
+  embedStatus(@CurrentUser() user: AuthenticatedUser) {
+    return this.ingestion.getEmbedStatus(user);
   }
 
   @Post("upload")

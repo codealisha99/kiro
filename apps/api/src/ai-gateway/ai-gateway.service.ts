@@ -3,6 +3,31 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { z } from "zod";
+
+// Must match the vector(1536) column in the database migrations.
+const EMBEDDING_DIMENSIONS = 1536;
+const embedResultSchema = z.object({
+  embeddings: z.array(z.array(z.number().finite()).length(EMBEDDING_DIMENSIONS)),
+  model: z.string().min(1),
+  dimensions: z.literal(EMBEDDING_DIMENSIONS),
+});
+const generateResultSchema = z.object({
+  text: z.string(),
+  model: z.string().min(1),
+  model_version: z.string().min(1),
+  usage: z.record(z.number().finite().nonnegative()),
+});
+const gatewayStatusSchema = z.object({
+  llm_provider: z.string(),
+  embedding_provider: z.string(),
+  providers: z.array(z.object({
+    name: z.string(),
+    kind: z.enum(["llm", "embedding"]),
+    model: z.string(),
+    configured: z.boolean(),
+  })),
+});
 
 export interface EmbedResult {
   embeddings: number[][];
@@ -31,10 +56,6 @@ export interface GatewayStatus {
   providers: { name: string; kind: "llm" | "embedding"; model: string; configured: boolean }[];
 }
 
-/**
- * Thin HTTP client for the Python AI service (embeddings + generation).
- * Keeps the NestJS backend provider-agnostic — the AI service owns the gateway.
- */
 @Injectable()
 export class AiGatewayService {
   private readonly baseUrl: string;
@@ -46,18 +67,15 @@ export class AiGatewayService {
   }
 
   async embedTexts(texts: string[]): Promise<EmbedResult> {
-    const body = await this.post<{
-      embeddings: number[][];
-      model: string;
-      dimensions: number;
-    }>("/embed", { texts });
+    const body = await this.request("/embed", embedResultSchema, { texts });
+    if (body.embeddings.length !== texts.length) {
+      throw new ServiceUnavailableException("AI service returned an incomplete embedding batch");
+    }
     return body;
   }
 
   async generate(args: GenerateArgs): Promise<GenerateResult> {
-    const body = await this.post<
-      GenerateResult & { model_version: string }
-    >("/generate", {
+    const body = await this.request("/generate", generateResultSchema, {
       prompt: args.prompt,
       system_prompt: args.systemPrompt,
       model: args.model,
@@ -73,11 +91,15 @@ export class AiGatewayService {
   }
 
   async status(): Promise<GatewayStatus> {
-    const body = await this.post<GatewayStatus>("/gateway", {}, "GET");
-    return body;
+    const body = await this.request("/gateway", gatewayStatusSchema, undefined, "GET");
+    return {
+      llmProvider: body.llm_provider,
+      embeddingProvider: body.embedding_provider,
+      providers: body.providers,
+    };
   }
 
-  private async post<T>(path: string, payload: unknown, method: "POST" | "GET" = "POST"): Promise<T> {
+  private async request<T>(path: string, schema: z.ZodType<T>, payload: unknown, method: "POST" | "GET" = "POST"): Promise<T> {
     let res: Response;
     try {
       res = await fetch(`${this.baseUrl}${path}`, {
@@ -97,6 +119,10 @@ export class AiGatewayService {
         `AI service error (${res.status}): ${detail.slice(0, 300)}`,
       );
     }
-    return (await res.json()) as T;
+    try {
+      return schema.parse(await res.json());
+    } catch {
+      throw new ServiceUnavailableException("AI service returned an invalid response");
+    }
   }
 }

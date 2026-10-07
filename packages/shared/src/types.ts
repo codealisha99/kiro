@@ -32,8 +32,6 @@ export interface PermissionAssignment {
   createdAt: Date;
 }
 
-// ---- Knowledge object model (PRD section 8) ----
-
 export interface Document {
   id: string;
   tenantId: string;
@@ -70,8 +68,6 @@ export interface DocumentACL {
   principalId: string;
   permission: Permission;
 }
-
-// ---- Query data model (PRD section 9) ----
 
 export interface AIRequest {
   id: string;

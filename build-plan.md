@@ -20,7 +20,7 @@ This plan turns the PRD (`PRODUCT REQUIREMENTS DOCUMENT (PRD) COMPANY BRAIN.pdf`
 ## 1. Repository Structure (Phase 0 — Scaffold)
 
 ```
-alisha-1/
+kiro/
 ├── .context/                    # PRD-derived context (source of truth)
 ├── build-plan.md                # THIS FILE
 ├── package.json                 # pnpm + turbo root

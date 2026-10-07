@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import FastAPI
 
 from app.health import router as health_router
@@ -13,7 +11,6 @@ app = FastAPI(
 
 app.include_router(health_router, prefix="/admin")
 app.include_router(ai_router)
-
 
 @app.get("/")
 def root() -> dict[str, str]:

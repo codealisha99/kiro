@@ -17,7 +17,6 @@ describe("UsersService — tenant isolation", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: "tenant-A" } }),
     );
-    // Cross-tenant rows must never be returned: assert no tenantId omission.
     const where = (findMany.mock.calls[0][0] as { where: { tenantId: string } }).where;
     expect(where.tenantId).toBeDefined();
   });

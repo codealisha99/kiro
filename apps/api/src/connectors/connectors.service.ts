@@ -23,7 +23,6 @@ export class ConnectorsService {
     return null;
   }
 
-  /** Trigger a sync for a source — MVP: fetch stub + ingest + update lastSyncAt */
   async sync(tenantId: string, sourceId: string, user: { id: string; tenantId: string; role: string }) {
     const source = await this.prisma.source.findFirst({ where: { id: sourceId, tenantId, deleted: false } });
     if (!source) throw new Error("Source not found");

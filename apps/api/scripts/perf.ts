@@ -1,7 +1,3 @@
-/**
- * Simple perf harness: measures p50/p95 latency for brain queries.
- * Usage: pnpm --filter @kiro/api ts-node scripts/perf.ts (requires running API + auth token in env)
- */
 const API = process.env.API_URL ?? "http://localhost:3001";
 const TOKEN = process.env.KIRO_TOKEN ?? "";
 

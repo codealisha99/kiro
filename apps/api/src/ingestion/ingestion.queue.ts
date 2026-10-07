@@ -54,7 +54,6 @@ export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
     await this.workerConnection?.quit().catch(() => undefined);
   }
 
-  /** Enqueue chunk-embedding for a document version (idempotent per version). */
   async enqueueEmbedVersion(versionId: string) {
     return this.queue?.add(
       "embed-version",

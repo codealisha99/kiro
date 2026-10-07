@@ -21,7 +21,6 @@ function isFragment(v: unknown): v is SqlFragment {
   );
 }
 
-/** All SQL text across the template strings AND inlined fragment args. */
 function fullSql(call: unknown[]): string {
   const arg = call[0];
   const pieces: string[] = [];
@@ -36,7 +35,6 @@ function fullSql(call: unknown[]): string {
   return pieces.join("");
 }
 
-/** All scalar + fragment values in order. */
 function allValues(call: unknown[]): unknown[] {
   const values: unknown[] = [];
   for (const v of call.slice(1)) {
@@ -91,7 +89,6 @@ describe("RetrievalService — query-time authorization (fail closed)", () => {
     expect(sql).toContain("'PUBLIC'");
     expect(sql).toContain("'USER'");
     expect(sql).toContain("'ROLE'");
-    // bound params are the caller's identity — never another principal's
     expect(clause.values).toContain("u1");
     expect(clause.values).toContain("MANAGER");
   });
@@ -153,7 +150,6 @@ describe("RetrievalService — query-time authorization (fail closed)", () => {
     const service = new RetrievalService(prisma, ai);
     const results = await service.search(user, "refund policy", 5);
 
-    // c2 appears in both lists → wins on RRF.
     expect(results[0].chunkId).toBe("c2");
     expect(results.length).toBeLessThanOrEqual(5);
   });

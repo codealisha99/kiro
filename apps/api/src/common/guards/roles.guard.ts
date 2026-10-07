@@ -9,7 +9,6 @@ import type { RBACRole } from "@kiro/shared";
 import type { AuthenticatedUser } from "../../auth/jwt-payload.interface";
 import { ROLES_KEY } from "../decorators/roles.decorator";
 
-/** Enforces @Roles() metadata against the authenticated principal. */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -27,7 +26,6 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       throw new ForbiddenException("Authentication required");
     }
-    // ADMIN implicitly satisfies every role requirement.
     if (user.role === "admin") {
       return true;
     }

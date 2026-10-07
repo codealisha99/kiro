@@ -1,5 +1,3 @@
-"""HTTP routes exposing the provider-independent gateway + embeddings."""
-
 from fastapi import APIRouter, HTTPException
 
 from app.config import get_settings
@@ -32,7 +30,6 @@ _embedding_provider = OpenAICompatibleEmbeddingProvider(
 )
 _llm_providers: list[LLMProvider] = [_llm_provider]
 
-
 @router.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest) -> EmbedResponse:
     if not _settings.llm_api_key and not _settings.resolved_embedding_api_key:
@@ -47,7 +44,6 @@ def embed(req: EmbedRequest) -> EmbedResponse:
         dimensions=result.dimensions,
         usage=result.usage,
     )
-
 
 @router.post("/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest) -> GenerateResponse:
@@ -73,7 +69,6 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         model_version=result.model_version,
         usage=result.usage,
     )
-
 
 @router.get("/gateway", response_model=GatewayStatus)
 def gateway_status() -> GatewayStatus:

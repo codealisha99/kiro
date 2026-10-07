@@ -1,16 +1,9 @@
-"""Embedding providers (PRD 6.7 spirit — provider independence).
-
-Mirrors the LLM gateway abstraction so the retrieval pipeline never
-depends on a specific embedding vendor.
-"""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from app.clients import OpenAICompatClient
-
 
 @dataclass
 class EmbeddingResponse:
@@ -19,7 +12,6 @@ class EmbeddingResponse:
     dimensions: int
     usage: dict[str, int]
 
-
 class EmbeddingProvider(ABC):
     name: str
     dimensions: int
@@ -27,7 +19,6 @@ class EmbeddingProvider(ABC):
     @abstractmethod
     def embed(self, texts: list[str]) -> EmbeddingResponse:
         ...
-
 
 class OpenAICompatibleEmbeddingProvider(EmbeddingProvider):
     def __init__(
@@ -44,9 +35,9 @@ class OpenAICompatibleEmbeddingProvider(EmbeddingProvider):
         self._client = OpenAICompatClient(base_url, api_key, timeout_seconds)
 
     def embed(self, texts: list[str]) -> EmbeddingResponse:
-        # Cap per-request payloads; large batches are re-chunked by the caller.
+
         if len(texts) > 128:
-            # keep ordering stable
+
             flat: dict[int, list[float]] = {}
             for start in range(0, len(texts), 128):
                 batch = texts[start : start + 128]

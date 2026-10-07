@@ -52,9 +52,7 @@ describe("BrainService", () => {
     expect(result.status).toBe("unknown");
     expect(result.answer).toContain("don't have sufficient information");
     expect(result.sources).toEqual([]);
-    // No LLM call must happen for an unknown with no evidence.
     expect(ai.generate).not.toHaveBeenCalled();
-    // Every access is audited.
     expect(prisma.auditLog.create).toHaveBeenCalledTimes(2);
   });
 
@@ -84,11 +82,10 @@ describe("BrainService", () => {
 
     expect(result.status).toBe("answered");
     expect(result.answer).not.toContain("STATUS:");
-    expect(result.sources.length).toBe(1); // only [1] cited
+    expect(result.sources.length).toBe(1);
     expect(result.sources[0].documentId).toBe("d1");
     expect(result.sources[0].version).toBe(2);
 
-    // Evidence + audit persisted.
     expect(prisma.aIResponse.create).toHaveBeenCalled();
     expect(prisma.responseEvidence.createMany).toHaveBeenCalled();
   });
@@ -140,7 +137,6 @@ describe("BrainService", () => {
     await expect(service.query(user, { query: "anything" })).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
-    // failure audited
     expect(prisma.auditLog.create).toHaveBeenCalledTimes(2);
     const failed = (prisma.auditLog.create as jest.Mock).mock.calls.map((c) => c[0].data.action);
     expect(failed).toContain("query.failed");

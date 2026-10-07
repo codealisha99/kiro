@@ -8,10 +8,6 @@ export interface RawChunk {
   content: string;
 }
 
-/**
- * Splits text into overlapping chunks. Block-based so it stays
- * deterministic and testable (no LLM/embedding dependency).
- */
 @Injectable()
 export class ChunkerService {
   constructor(
@@ -38,7 +34,6 @@ export class ChunkerService {
         chunks.push(buffer);
       }
       if (paragraph.length > this.chunkSize) {
-        // Break oversized paragraphs by sentence/word boundaries.
         chunks.push(...this.splitLong(paragraph));
         buffer = "";
       } else {
@@ -79,7 +74,6 @@ export class ChunkerService {
         buffer = "";
       }
       if (part.length > this.chunkSize) {
-        // Hard-slice unbroken runs (no punctuation/newlines available).
         for (let i = 0; i < part.length; i += this.chunkSize) {
           flush(part.slice(i, i + this.chunkSize));
         }

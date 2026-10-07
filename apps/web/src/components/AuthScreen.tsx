@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, Button, Field, Input } from "@/components/ui";
+
 import { FormEvent, useState } from "react";
 import { api, setToken } from "@/lib/api";
 
@@ -61,51 +63,86 @@ export default function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
           </div>
           <h2>{mode === "login" ? "Open the desk" : "Create a workspace"}</h2>
 
-          {error && <div className="err">{error}</div>}
+          {error && <Alert tone="danger">{error}</Alert>}
 
           <form className="form" onSubmit={submit}>
             {mode === "register" && (
               <>
-                <input
-                  placeholder="Company name"
-                  value={form.tenantName}
+                <Field label="Company name">
+                  {(field) => (
+                    <Input
+                      {...field}
+                      autoComplete="organization"
+                      placeholder="Company name"
+                      value={form.tenantName}
+                      onChange={(e) =>
+                        setForm({ ...form, tenantName: e.target.value })
+                      }
+                      required
+                    />
+                  )}
+                </Field>
+                <Field label="Your name" hint="Optional">
+                  {(field) => (
+                    <Input
+                      {...field}
+                      autoComplete="name"
+                      placeholder="Your name"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm({ ...form, name: e.target.value })
+                      }
+                    />
+                  )}
+                </Field>
+              </>
+            )}
+            <Field label="Work email">
+              {(field) => (
+                <Input
+                  {...field}
+                  autoComplete="email"
+                  type="email"
+                  placeholder="Work email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+              )}
+            </Field>
+            <Field
+              label="Password"
+              hint={
+                mode === "register" ? "Use at least 8 characters." : undefined
+              }
+            >
+              {(field) => (
+                <Input
+                  {...field}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  type="password"
+                  placeholder="Password"
+                  minLength={8}
+                  value={form.password}
                   onChange={(e) =>
-                    setForm({ ...form, tenantName: e.target.value })
+                    setForm({ ...form, password: e.target.value })
                   }
                   required
                 />
-                <input
-                  placeholder="Your name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </>
-            )}
-            <input
-              type="email"
-              placeholder="Work email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              minLength={8}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-            />
-            <button className="btn block" type="submit" disabled={busy}>
+              )}
+            </Field>
+            <Button variant="primary" fullWidth type="submit" disabled={busy}>
               {busy
                 ? "Please wait…"
                 : mode === "login"
                   ? "Open the desk"
                   : "Create a workspace"}
-            </button>
+            </Button>
           </form>
 
-          <p className="muted" style={{ marginTop: 16 }}>
+          <p className="muted auth-footer">
             {mode === "login" ? "New here?" : "Already have a desk?"}{" "}
             <button
               className="link-btn"

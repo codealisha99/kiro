@@ -1,7 +1,5 @@
 import type { Classification, DocumentStatus, Permission } from "./constants";
 
-// ---- Sources ----
-
 export type SourceType = "google_drive" | "slack" | "crm" | "manual";
 export type SourceStatusName = "connected" | "disconnected" | "error" | "syncing";
 
@@ -20,8 +18,6 @@ export interface CreateSourceRequest {
   type: SourceType;
   name: string;
 }
-
-// ---- Documents ----
 
 export interface DocumentVersionDto {
   id: string;
@@ -58,7 +54,6 @@ export interface IngestDocumentRequest {
   title: string;
   content: string;
   classification?: Classification;
-  /** ACL grants on top of the owner's implicit access. */
   acl?: IngestAclGrant[];
 }
 
@@ -83,13 +78,18 @@ export interface DemoSeedResponse {
   };
 }
 
+export interface EmbedStatus {
+  totalChunks: number;
+  embeddedChunks: number;
+  pendingChunks: number;
+  ready: boolean;
+}
+
 export interface IngestAclGrant {
   principalType: "user" | "role" | "group";
   principalId: string;
   permission?: Permission;
 }
-
-// ---- Conversations ----
 
 export interface ConversationDto {
   id: string;
@@ -114,8 +114,6 @@ export interface ConversationMessageDto {
 export interface ConversationDetail extends ConversationDto {
   messages: ConversationMessageDto[];
 }
-
-// ---- Brain query ----
 
 export interface BrainQueryRequest {
   query: string;
@@ -147,15 +145,11 @@ export interface BrainQueryResponse {
   message?: string;
 }
 
-// ---- Feedback ----
-
 export interface FeedbackRequest {
   requestId: string;
   helpful: boolean;
   comment?: string;
 }
-
-// ---- Admin ----
 
 export interface AuditLogEntry {
   id: string;

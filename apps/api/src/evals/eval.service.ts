@@ -45,9 +45,7 @@ export class EvalService {
     const results: EvalResult[] = [];
     for (const c of cases) {
       const chunks = await this.retrieval.search(user, c.query, 5);
-      // Map chunk -> externalKey via title heuristic (demo corpus title contains key)
       const retrieved = [...new Set(chunks.map((ch) => ch.title.toLowerCase()))];
-      // Check hit: at least one expected doc's title words appear
       const hit = c.expectedDocuments.length === 0
         ? chunks.length === 0
         : c.expectedDocuments.some((exp) => retrieved.some((t) => t.includes(exp.replace(/-/g, " ").split(" ")[0])));
