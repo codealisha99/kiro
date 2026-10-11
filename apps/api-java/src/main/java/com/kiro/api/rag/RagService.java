@@ -289,7 +289,7 @@ public class RagService {
 
   private void audit(
       AuthenticatedPrincipal user, String action, String resource, String resourceId,
-      String query, Object retrievedSources, String permissionDecision, String model, String error) {
+      String query, List<Map<String, Object>> retrievedSources, String permissionDecision, String model, String error) {
     AuditLog log = new AuditLog();
     log.setTenantId(user.tenantId());
     log.setUserId(user.id());

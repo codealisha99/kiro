@@ -2,6 +2,8 @@ package com.kiro.api.domain;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -29,7 +31,7 @@ public class AuditLog extends BaseEntity {
 
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "\"retrievedSources\"")
-  private Object retrievedSources;
+  private List<Map<String, Object>> retrievedSources;
 
   @Column(name = "\"permissionDecision\"")
   private String permissionDecision;
@@ -58,8 +60,8 @@ public class AuditLog extends BaseEntity {
   public void setResourceId(String v) { this.resourceId = v; }
   public String getQuery() { return query; }
   public void setQuery(String v) { this.query = v; }
-  public Object getRetrievedSources() { return retrievedSources; }
-  public void setRetrievedSources(Object v) { this.retrievedSources = v; }
+  public List<Map<String, Object>> getRetrievedSources() { return retrievedSources; }
+  public void setRetrievedSources(List<Map<String, Object>> v) { this.retrievedSources = v; }
   public String getPermissionDecision() { return permissionDecision; }
   public void setPermissionDecision(String v) { this.permissionDecision = v; }
   public String getModel() { return model; }

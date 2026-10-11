@@ -30,6 +30,14 @@ Railway API has retired `railway.toml`; do not configure a legacy config path.
 The imported infrastructure is recorded in `.railway/railway.ts`. Run
 `railway config plan` from this linked checkout to review proposed changes.
 Service variables are unmanaged in this file and remain in Railway.
+Vercel uses its native GitHub integration. Railway GitHub push triggers deploy
+`main` after GitHub CI succeeds. The Railway GitHub App has repository access.
+For a manual deployment from this checkout:
+
+```bash
+railway up --service api --environment production --ci
+railway up --service ai --environment production --ci
+```
 
 | Service | Source | Config / volume |
 | --- | --- | --- |

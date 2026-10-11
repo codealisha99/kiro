@@ -1,7 +1,7 @@
 import { defineRailway, github, postgres, project, redis, service, volume } from "railway/iac";
 
 export default defineRailway(() => {
-  const kiro = github("codealisha99/kiro");
+  const kiro = github("codealisha99/kiro", { branch: "main", checkSuites: true });
 
   const Postgres = postgres("Postgres", { region: "sfo" });
   Postgres.networking = { privateNetworkEndpoint: "postgres" };
