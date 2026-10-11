@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui";
-
+import { WorkspaceIcon } from "./WorkspaceIcon";
 import type { CitationSource, DocumentDetail } from "@kiro/shared";
 
 export default function EvidencePanel({
@@ -13,77 +13,85 @@ export default function EvidencePanel({
   citation: CitationSource | null;
   loading: boolean;
 }) {
-  if (loading) {
+  if (loading)
     return (
-      <div className="scroll">
-        <p className="spinner" role="status">
-          Opening the source…
-        </p>
+      <div className="source-loading" role="status">
+        <WorkspaceIcon name="file" />
+        <p>Opening the source…</p>
       </div>
     );
-  }
-
-  if (!document) {
+  if (!document)
     return (
-      <div className="scroll">
-        <div className="evidence-empty">
-          <h2>No document selected</h2>
-          <p>
-            Click a numbered citation in an answer, or open a document from the
-            library. The exact passage appears here.
-          </p>
-        </div>
+      <div className="evidence-empty">
+        <h2>No document selected</h2>
+        <p>Open a citation or choose a document from your library.</p>
       </div>
     );
-  }
 
-  const needle = citation?.excerpt?.trim();
-  const highlighted = needle
-    ? highlightPassage(document.content, needle)
-    : escapeHtml(document.content);
-
+  const excerpt = citation?.excerpt?.trim();
+  const match = excerpt ? findPassage(document.content, excerpt) : null;
   return (
-    <div className="scroll">
-      <div className="row" style={{ marginBottom: 10 }}>
+    <div className="source-reader">
+      <div className="source-meta">
         <Badge className={document.classification}>
-          {document.classification}
+          {document.classification === "internal"
+            ? "Workspace"
+            : document.classification === "restricted"
+              ? "Only you"
+              : document.classification}
         </Badge>
+        <span>Version {document.versionCount}</span>
       </div>
       <h3 className="evidence-title">{document.title}</h3>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        {document.filename ?? "Pasted text"} · v{document.versionCount} ·{" "}
-        {new Date(document.updatedAt).toLocaleDateString()}
+      <p className="source-file">
+        <WorkspaceIcon name="file" />
+        {document.filename ?? "Pasted text"}
+        <span>
+          Updated{" "}
+          {new Date(document.updatedAt).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </span>
       </p>
-      {citation && (
-        <p className="muted" style={{ marginBottom: 12 }}>
-          The passage used in this answer is highlighted below.
-        </p>
+      {excerpt && (
+        <section
+          className="source-excerpt"
+          aria-label="Passage used in this answer"
+        >
+          <p>
+            <WorkspaceIcon name="book" />
+            Passage used in this answer
+          </p>
+          <blockquote>{excerpt}</blockquote>
+        </section>
       )}
-      <div
-        className="passage"
-        dangerouslySetInnerHTML={{ __html: highlighted }}
-      />
+      <details className="source-full-document" open={!excerpt}>
+        <summary>
+          Read full document <WorkspaceIcon name="chevron" />
+        </summary>
+        <div className="passage">
+          {match ? (
+            <>
+              {document.content.slice(0, match.index)}
+              <mark>{match[0]}</mark>
+              {document.content.slice(match.index + match[0].length)}
+            </>
+          ) : (
+            document.content
+          )}
+        </div>
+      </details>
     </div>
   );
 }
 
-function highlightPassage(content: string, excerpt: string): string {
-  const escaped = escapeHtml(content);
-  const needle = excerpt.slice(0, 80).replace(/\s+/g, " ").trim();
-  if (!needle) {
-    return escaped;
-  }
-  const idx = escaped.toLowerCase().indexOf(escapeHtml(needle).toLowerCase());
-  if (idx < 0) {
-    return `${escaped}\n\n<blockquote>${escapeHtml(excerpt)}</blockquote>`;
-  }
-  const end = idx + escapeHtml(needle).length;
-  return `${escaped.slice(0, idx)}<mark>${escaped.slice(idx, end)}</mark>${escaped.slice(end)}`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+function findPassage(content: string, excerpt: string): RegExpExecArray | null {
+  // Match the entire cited passage even when the document uses different line breaks.
+  const pattern = excerpt
+    .split(/\s+/)
+    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\s+");
+  return new RegExp(pattern, "i").exec(content);
 }

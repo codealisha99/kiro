@@ -23,15 +23,19 @@ export default function KnowledgeLibrary({
   embedStatus,
   onOpen,
   onRefresh,
+  initialAdding = false,
 }: {
   documents: DocumentListItem[];
   sources: SourceDto[];
   embedStatus: EmbedStatus | null;
   onOpen: (id: string) => void;
   onRefresh: () => Promise<void>;
+  initialAdding?: boolean;
 }) {
+  const [access, setAccess] = useState("all");
+  const [sort, setSort] = useState("updated");
   const [search, setSearch] = useState("");
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(initialAdding);
   const [mode, setMode] = useState<"file" | "text">("file");
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -45,11 +49,19 @@ export default function KnowledgeLibrary({
     () => new Map(sources.map((source) => [source.id, source.name])),
     [sources],
   );
-  const filtered = documents.filter((doc) =>
-    `${doc.title} ${names.get(doc.sourceId) ?? ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const filtered = documents
+    .filter(
+      (doc) =>
+        `${doc.title} ${names.get(doc.sourceId) ?? ""}`
+          .toLowerCase()
+          .includes(search.toLowerCase()) &&
+        (access === "all" || doc.classification === access),
+    )
+    .sort((a, b) =>
+      sort === "title"
+        ? a.title.localeCompare(b.title)
+        : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -103,7 +115,9 @@ export default function KnowledgeLibrary({
       <div className="library-heading">
         <div>
           <h1 id="library-title">Your library</h1>
-          <p>The knowledge behind your answers.</p>
+          <p>
+            The knowledge behind your answers. Keep it together, keep it useful.
+          </p>
         </div>
         <Button
           variant="primary"
@@ -134,8 +148,34 @@ export default function KnowledgeLibrary({
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+        <div className="library-filters">
+          <Select
+            aria-label="Filter by document access"
+            value={access}
+            onChange={(event) => setAccess(event.target.value)}
+          >
+            <option value="all">All access levels</option>
+            <option value="internal">Workspace</option>
+            <option value="public">Public</option>
+            <option value="confidential">Confidential</option>
+            <option value="restricted">Only you</option>
+          </Select>
+          <Select
+            aria-label="Sort documents"
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+          >
+            <option value="updated">Recently updated</option>
+            <option value="title">Title A–Z</option>
+          </Select>
+        </div>
+      </div>
+      <div className="library-list-heading">
+        <span>Documents</span>
         <span className="library-count">
-          {documents.length} document{documents.length === 1 ? "" : "s"}
+          {filtered.length === documents.length
+            ? `${documents.length} document${documents.length === 1 ? "" : "s"}`
+            : `${filtered.length} of ${documents.length} documents`}
         </span>
       </div>
       {embedStatus && embedStatus.totalChunks > 0 && !embedStatus.ready && (
@@ -160,7 +200,19 @@ export default function KnowledgeLibrary({
             </span>
             <span className={`document-access ${doc.classification}`}>
               <WorkspaceIcon name="lock" />
-              {doc.classification}
+              {doc.classification === "internal"
+                ? "Workspace"
+                : doc.classification === "restricted"
+                  ? "Only you"
+                  : doc.classification === "confidential"
+                    ? "Confidential"
+                    : "Public"}
+            </span>
+            <span className="document-updated">
+              {new Date(doc.updatedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              })}
             </span>
             <WorkspaceIcon name="chevron" className="document-chevron" />
           </button>
@@ -175,9 +227,20 @@ export default function KnowledgeLibrary({
             </h2>
             <p>
               {documents.length
-                ? "Try a different title or source name."
+                ? "Try a different search or access level."
                 : "Add a policy, a project brief, or a useful piece of context."}
             </p>
+            {!!documents.length && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSearch("");
+                  setAccess("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
             {!documents.length && (
               <Button
                 variant="secondary"

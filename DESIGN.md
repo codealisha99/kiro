@@ -115,3 +115,7 @@ Use Hugeicons Free Stroke Rounded through `WorkspaceIcon`: 18–20px for control
 ## Marketing entry — 2026-10-11
 
 The public `/` page introduces the knowledge desk through an interactive, explicitly illustrative answer and source passage. It extends the existing editorial type and semantic palette, with a document stack, a three-step workflow, access and evidence explanations, and native expandable questions. `/app` hosts the workspace; `/app?mode=register` opens registration. Keep marketing claims aligned with available features and preserve direct access to the desk.
+
+## Knowledge desk refinement — 2026-10-11
+
+The desk uses a framed reading canvas and a quiet sidebar. A new workspace starts with document setup; a populated workspace offers a left-aligned editorial welcome, one question composer, three explicit question starters, and recent documents. The library supports title/source search, access filters, and sorting by update date or title. Citations open a reader with the exact excerpt first and an expandable full document; highlight the entire matching passage, allowing for different line breaks. Keep drawer focus handling, native dialogs, and all access checks intact.

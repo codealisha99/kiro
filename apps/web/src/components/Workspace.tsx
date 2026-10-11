@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BrainQueryResponse,
@@ -57,6 +58,8 @@ export default function Workspace({
 }: {
   initialAuthMode?: "login" | "register";
 }) {
+  const [loaded, setLoaded] = useState(false);
+  const [libraryStartAdding, setLibraryStartAdding] = useState(false);
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<UserDto | null>(null);
@@ -101,6 +104,7 @@ export default function Workspace({
       setDocuments(docs);
       setConversations(convs);
       setEmbedStatus(embeds);
+      setLoaded(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         clearToken();
@@ -298,9 +302,15 @@ export default function Workspace({
     setNotice(null);
     setView("ask");
     setRailOpen(false);
-    composerRef.current?.focus();
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+  function addKnowledge() {
+    setLibraryStartAdding(true);
+    setView("library");
+    setRailOpen(false);
   }
   function showLibrary() {
+    setLibraryStartAdding(false);
     setView("library");
     setRailOpen(false);
   }
@@ -313,6 +323,7 @@ export default function Workspace({
     clearToken();
     setAuthed(false);
     setUser(null);
+    setLoaded(false);
     setMessages([]);
     setActiveConversationId(null);
     setRailOpen(false);
@@ -350,6 +361,12 @@ export default function Workspace({
       />
     );
   const empty = messages.length === 0;
+  const recentDocuments = [...documents]
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, 3);
   const currentTitle = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   )?.title;
@@ -374,7 +391,9 @@ export default function Workspace({
           <span className="workspace-mark">
             <KiroMark />
           </span>
-          <span>Kiro</span>
+          <Link href="/" className="workspace-home" aria-label="Kiro home">
+            kiro
+          </Link>
           <Button
             className="workspace-mobile icon-button"
             variant="secondary"
@@ -384,6 +403,7 @@ export default function Workspace({
             <WorkspaceIcon name="close" />
           </Button>
         </div>
+        <p className="workspace-label">Your knowledge desk</p>
         <nav className="workspace-nav" aria-label="Main">
           <Button
             variant="secondary"
@@ -431,11 +451,22 @@ export default function Workspace({
                 disabled={busy}
                 title={conversation.title ?? "Untitled question"}
               >
-                {conversation.title ?? "Untitled question"}
+                <WorkspaceIcon name="message" />
+                <span>{conversation.title ?? "Untitled question"}</span>
               </button>
             ))
           )}
         </div>
+        {loaded && documents.length === 0 && (
+          <button className="sidebar-setup" onClick={addKnowledge}>
+            <WorkspaceIcon name="upload" />
+            <span>
+              <strong>Make this desk yours</strong>
+              <small>Add your first document</small>
+            </span>
+            <WorkspaceIcon name="chevron" />
+          </button>
+        )}
         {user && <AccountProfile user={user} onLogout={logout} />}
       </aside>
 
@@ -452,10 +483,13 @@ export default function Workspace({
             >
               <WorkspaceIcon name="menu" />
             </Button>
+            <span className="workspace-breadcrumb">
+              Workspace <span aria-hidden="true">/</span>
+            </span>
             <span>
               {view === "library"
                 ? "Knowledge library"
-                : currentTitle || "Your workspace"}
+                : currentTitle || "Ask Kiro"}
             </span>
           </div>
           <button className="workspace-library-link" onClick={showLibrary}>
@@ -479,13 +513,28 @@ export default function Workspace({
             </Alert>
           </div>
         )}
-        {view === "library" ? (
+        {!loaded ? (
+          <div className="workspace-loading" role="status">
+            <KiroMark />
+            <p>
+              {notice
+                ? "Your desk could not be loaded."
+                : "Opening your knowledge desk…"}
+            </p>
+            {notice && (
+              <Button variant="secondary" onClick={() => void load()}>
+                Try again
+              </Button>
+            )}
+          </div>
+        ) : view === "library" ? (
           <KnowledgeLibrary
             documents={documents}
             sources={sources}
             embedStatus={embedStatus}
             onOpen={(id) => void openDocument(id)}
             onRefresh={load}
+            initialAdding={libraryStartAdding}
           />
         ) : (
           <div
@@ -497,14 +546,43 @@ export default function Workspace({
                   <span className="welcome-emblem">
                     <KiroMark />
                   </span>
-                  A little clarity for your day
+                  {user?.name
+                    ? `Welcome, ${user.name.split(" ")[0]}`
+                    : "Your company knowledge, within reach"}
                 </span>
                 <h1>
-                  What would you
-                  <br />
-                  like to know?
+                  {loaded && !documents.length ? (
+                    <>
+                      Give your knowledge
+                      <br />a place to work.
+                    </>
+                  ) : (
+                    <>
+                      Your next answer
+                      <br />
+                      starts here.
+                    </>
+                  )}
                 </h1>
-                <p>Find the answer. Know where it came from.</p>
+                <p>
+                  {loaded && !documents.length
+                    ? "Start with a handbook, a process guide, or a few useful notes."
+                    : "Ask a question. Follow the evidence. Get on with your day."}
+                </p>
+                {loaded && !documents.length && (
+                  <div className="welcome-setup">
+                    <Button variant="primary" onClick={addKnowledge}>
+                      <WorkspaceIcon name="plus" />
+                      Add your first document
+                    </Button>
+                    <Button variant="secondary" onClick={showLibrary}>
+                      Explore with samples
+                    </Button>
+                    <span>
+                      PDF, Word, spreadsheets, Markdown, or plain text.
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="conversation-scroll">
@@ -559,23 +637,31 @@ export default function Workspace({
                             )}
                           </div>
                           {!!message.response?.sources.length && (
-                            <div className="answer-sources">
-                              {message.response.sources.map((source, i) => (
-                                <button
-                                  key={`${source.documentId}-${i}`}
-                                  onClick={() =>
-                                    void openDocument(source.documentId, source)
-                                  }
-                                >
-                                  <span>{i + 1}</span>
-                                  {source.title}
-                                  <WorkspaceIcon
-                                    name="chevron"
-                                    width="12"
-                                    height="12"
-                                  />
-                                </button>
-                              ))}
+                            <div className="answer-source-group">
+                              <p className="answer-source-label">
+                                Supporting sources
+                              </p>
+                              <div className="answer-sources">
+                                {message.response.sources.map((source, i) => (
+                                  <button
+                                    key={`${source.documentId}-${i}`}
+                                    onClick={() =>
+                                      void openDocument(
+                                        source.documentId,
+                                        source,
+                                      )
+                                    }
+                                  >
+                                    <span>{i + 1}</span>
+                                    {source.title}
+                                    <WorkspaceIcon
+                                      name="chevron"
+                                      width="12"
+                                      height="12"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                           {message.response && (
@@ -617,77 +703,112 @@ export default function Workspace({
                 </div>
               </div>
             )}
-            <div className="question-entry">
-              <form
-                className="question-composer"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void send();
-                }}
-              >
-                <Textarea
-                  ref={composerRef}
-                  aria-label="Ask a question"
-                  placeholder={
-                    empty
-                      ? "Ask anything about your company…"
-                      : "Ask a follow-up question…"
-                  }
-                  rows={2}
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "Enter" &&
-                      !event.shiftKey &&
-                      !event.nativeEvent.isComposing
-                    ) {
-                      event.preventDefault();
-                      void send();
-                    }
+            {(!empty || documents.length > 0) && (
+              <div className="question-entry">
+                <form
+                  className="question-composer"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void send();
                   }}
-                  disabled={busy}
-                />
-                <div className="composer-toolbar">
-                  <span>
-                    <WorkspaceIcon name="lock" width="13" height="13" />
-                    Connected to your library
-                  </span>
-                  <StatefulButton
-                    loading={busy}
-                    variant="primary"
-                    type="submit"
-                    className="send-question"
-                    aria-label={busy ? "Finding an answer" : "Send question"}
-                    disabled={busy || !input.trim()}
-                  >
-                    {!busy && (
-                      <WorkspaceIcon name="arrow" width="20" height="20" />
-                    )}
-                  </StatefulButton>
-                </div>
-              </form>
-              {empty ? (
-                <div className="question-suggestions">
-                  {PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt.label}
-                      onClick={() => {
-                        setInput(prompt.query);
-                        composerRef.current?.focus();
-                      }}
+                >
+                  <Textarea
+                    ref={composerRef}
+                    aria-label="Ask a question"
+                    placeholder={
+                      empty
+                        ? "Ask anything about your company…"
+                        : "Ask a follow-up question…"
+                    }
+                    rows={2}
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        !event.nativeEvent.isComposing
+                      ) {
+                        event.preventDefault();
+                        void send();
+                      }
+                    }}
+                    disabled={busy}
+                  />
+                  <div className="composer-toolbar">
+                    <span>
+                      <WorkspaceIcon name="lock" width="13" height="13" />
+                      {documents.length} document
+                      {documents.length === 1 ? "" : "s"} in your library
+                    </span>
+                    <span className="composer-shortcut">
+                      Enter to ask <kbd>↵</kbd>
+                    </span>
+                    <StatefulButton
+                      loading={busy}
+                      variant="primary"
+                      type="submit"
+                      className="send-question"
+                      aria-label={busy ? "Finding an answer" : "Send question"}
+                      disabled={busy || !input.trim()}
                     >
-                      <WorkspaceIcon name={prompt.icon} />
-                      <span>{prompt.label}</span>
+                      {!busy && (
+                        <WorkspaceIcon name="arrow" width="20" height="20" />
+                      )}
+                    </StatefulButton>
+                  </div>
+                </form>
+                {empty ? (
+                  <div className="question-suggestions">
+                    {PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt.label}
+                        onClick={() => {
+                          setInput(prompt.query);
+                          composerRef.current?.focus();
+                        }}
+                      >
+                        <WorkspaceIcon name={prompt.icon} />
+                        <span>
+                          <strong>{prompt.label}</strong>
+                          <small>{prompt.query}</small>
+                        </span>
+                        <WorkspaceIcon name="chevron" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="composer-note">
+                    Answers link to the sources you can access.
+                  </p>
+                )}
+              </div>
+            )}
+            {empty && documents.length > 0 && (
+              <section
+                className="desk-documents"
+                aria-labelledby="desk-documents-title"
+              >
+                <div className="desk-documents-heading">
+                  <h2 id="desk-documents-title">From your library</h2>
+                  <button onClick={showLibrary}>
+                    View all <WorkspaceIcon name="chevron" />
+                  </button>
+                </div>
+                <div className="desk-document-list">
+                  {recentDocuments.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => void openDocument(doc.id)}
+                    >
+                      <WorkspaceIcon name="file" />
+                      <span>{doc.title}</span>
+                      <WorkspaceIcon name="chevron" />
                     </button>
                   ))}
                 </div>
-              ) : (
-                <p className="composer-note">
-                  Answers link to the sources you can access.
-                </p>
-              )}
-            </div>
+              </section>
+            )}
             {empty && (
               <p className="welcome-footnote">
                 <WorkspaceIcon name="lock" width="12" height="12" />
