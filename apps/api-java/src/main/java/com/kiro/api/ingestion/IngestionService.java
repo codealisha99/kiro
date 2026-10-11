@@ -105,6 +105,15 @@ public class IngestionService {
 
   // ---- documents ----
 
+  public Map<String, Object> getEmbedStatus(AuthenticatedPrincipal user) {
+    var counts = chunks.countEmbeddings(user.tenantId());
+    long total = counts.getTotal();
+    long embedded = counts.getEmbedded();
+    long pending = Math.max(0, total - embedded);
+    return Map.of("totalChunks", total, "embeddedChunks", embedded,
+        "pendingChunks", pending, "ready", pending == 0);
+  }
+
   public List<Map<String, Object>> listDocuments(AuthenticatedPrincipal user) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Document d : documents.findVisible(user.tenantId(), user.id(), user.roleUpper())) {
@@ -149,12 +158,13 @@ public class IngestionService {
     }
     List<Map<String, Object>> versionDtos = new ArrayList<>();
     for (DocumentVersion v : vers) {
-      versionDtos.add(Map.of(
-          "id", v.getId(),
-          "version", v.getVersion(),
-          "contentHash", v.getContentHash(),
-          "filename", v.getFilename() == null ? null : v.getFilename(),
-          "createdAt", v.getCreatedAt().toString()));
+      var version = new java.util.LinkedHashMap<String, Object>();
+      version.put("id", v.getId());
+      version.put("version", v.getVersion());
+      version.put("contentHash", v.getContentHash());
+      version.put("filename", v.getFilename());
+      version.put("createdAt", v.getCreatedAt().toString());
+      versionDtos.add(version);
     }
     var out = new java.util.LinkedHashMap<String, Object>();
     out.put("id", doc.getId());

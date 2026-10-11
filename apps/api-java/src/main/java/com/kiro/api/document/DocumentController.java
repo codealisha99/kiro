@@ -44,6 +44,11 @@ class DocumentController {
     return ingestion.listDocuments(user);
   }
 
+  @GetMapping("/embed-status")
+  public Map<String, Object> embedStatus(@AuthenticationPrincipal AuthenticatedPrincipal user) {
+    return ingestion.getEmbedStatus(user);
+  }
+
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> ingest(

@@ -39,6 +39,7 @@ public class JwtService {
     long expiresIn = props.jwt().expiresInSeconds();
     Date now = new Date();
     return Jwts.builder()
+        .id(java.util.UUID.randomUUID().toString())
         .subject(userId)
         .claim("email", email)
         .claim("tenantId", tenantId)

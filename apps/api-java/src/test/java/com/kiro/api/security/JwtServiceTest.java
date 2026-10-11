@@ -28,6 +28,13 @@ class JwtServiceTest {
   }
 
   @Test
+  void repeatedLoginsIssueDistinctTokens() {
+    JwtService svc = service("test-secret-that-is-long-enough-for-hs256-123456");
+    assertNotEquals(svc.issue("u1", "a@b.c", "t1", "admin"),
+        svc.issue("u1", "a@b.c", "t1", "admin"));
+  }
+
+  @Test
   void tamperedTokenRejected() {
     JwtService svc = service("test-secret-that-is-long-enough-for-hs256-123456");
     String token = svc.issue("u1", "a@b.c", "t1", "employee");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button } from "@/components/ui";
+import { Badge } from "@/components/ui";
 
 import type { CitationSource, DocumentDetail } from "@kiro/shared";
 
@@ -8,12 +8,10 @@ export default function EvidencePanel({
   document,
   citation,
   loading,
-  onClose,
 }: {
   document: DocumentDetail | null;
   citation: CitationSource | null;
   loading: boolean;
-  onClose: () => void;
 }) {
   if (loading) {
     return (
@@ -28,8 +26,8 @@ export default function EvidencePanel({
   if (!document) {
     return (
       <div className="scroll">
-        <div className="empty-ask evidence-empty">
-          <h2>The ledger is empty</h2>
+        <div className="evidence-empty">
+          <h2>No document selected</h2>
           <p>
             Click a numbered citation in an answer, or open a document from the
             library. The exact passage appears here.
@@ -42,7 +40,7 @@ export default function EvidencePanel({
   const needle = citation?.excerpt?.trim();
   const highlighted = needle
     ? highlightPassage(document.content, needle)
-    : document.content;
+    : escapeHtml(document.content);
 
   return (
     <div className="scroll">
@@ -50,9 +48,6 @@ export default function EvidencePanel({
         <Badge className={document.classification}>
           {document.classification}
         </Badge>
-        <Button variant="secondary" size="small" onClick={onClose}>
-          Close
-        </Button>
       </div>
       <h3 className="evidence-title">{document.title}</h3>
       <p className="muted" style={{ marginBottom: 16 }}>
@@ -61,7 +56,7 @@ export default function EvidencePanel({
       </p>
       {citation && (
         <p className="muted" style={{ marginBottom: 12 }}>
-          Pulled because it supported the answer. Matching lines are marked.
+          The passage used in this answer is highlighted below.
         </p>
       )}
       <div

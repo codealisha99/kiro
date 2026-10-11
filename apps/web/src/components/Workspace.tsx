@@ -1,29 +1,30 @@
 "use client";
 
-import { Alert, Badge, Button, Field, Input, Textarea, Select } from "@/components/ui";
-
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BrainQueryResponse,
   CitationSource,
   ConversationDto,
-  DemoSeedResponse,
   DocumentDetail,
   DocumentListItem,
   EmbedStatus,
   SourceDto,
   UserDto,
 } from "@kiro/shared";
-import { api, clearToken, getToken } from "@/lib/api";
+import {
+  Alert,
+  Button,
+  Dialog,
+  StatefulButton,
+  Textarea,
+} from "@/components/ui";
+import { api, ApiError, clearToken, getToken } from "@/lib/api";
+import { AccountProfile } from "./AccountProfile";
 import AuthScreen from "./AuthScreen";
 import EvidencePanel from "./EvidencePanel";
+import KnowledgeLibrary from "./KnowledgeLibrary";
+import { KiroMark, WorkspaceIcon } from "./WorkspaceIcon";
+import "./workspace.css";
 
 interface ChatMessage {
   id: string;
@@ -34,176 +35,164 @@ interface ChatMessage {
 }
 
 const PROMPTS = [
-  "What is our refund policy?",
-  "Find documents related to supplier onboarding.",
-  "Summarize the latest supplier policy.",
-  "What happened with Client Helios?",
-  "What was our revenue in 2035?",
+  {
+    label: "Understand a policy",
+    query: "What is our refund policy?",
+    icon: "book" as const,
+  },
+  {
+    label: "Find a process",
+    query: "How do we onboard a new supplier?",
+    icon: "search" as const,
+  },
+  {
+    label: "Catch up on a client",
+    query: "What happened with Client Helios?",
+    icon: "message" as const,
+  },
 ];
 
 export default function Workspace() {
-  const [authed, setAuthed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<UserDto | null>(null);
   const [sources, setSources] = useState<SourceDto[]>([]);
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [conversations, setConversations] = useState<ConversationDto[]>([]);
+  const [embedStatus, setEmbedStatus] = useState<EmbedStatus | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ingest, setIngest] = useState({
-    title: "",
-    content: "",
-    classification: "internal",
-  });
-  const [file, setFile] = useState<File | null>(null);
-  const [notice, setNotice] = useState<{
-    message: string;
-    tone: "info" | "danger";
-  } | null>(null);
-  const [seedInfo, setSeedInfo] = useState<DemoSeedResponse | null>(null);
-  const [embedStatus, setEmbedStatus] = useState<EmbedStatus | null>(null);
-  const [showReadyBanner, setShowReadyBanner] = useState(false);
-  const wasIndexingRef = useRef(false);
-  const [ledgerTab, setLedgerTab] = useState<"library" | "evidence">("library");
+  const [view, setView] = useState<"ask" | "library">("ask");
+  const [railOpen, setRailOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [documentOpen, setDocumentOpen] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDetail | null>(null);
   const [activeCite, setActiveCite] = useState<CitationSource | null>(null);
   const [docLoading, setDocLoading] = useState(false);
-  const [railOpen, setRailOpen] = useState(false);
-  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, "pending" | "saved">>(
+    {},
+  );
   const railRef = useRef<HTMLElement>(null);
-  const ledgerRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const panel = railOpen ? railRef.current : ledgerOpen ? ledgerRef.current : null;
-    const media = window.matchMedia(
-      railOpen ? "(max-width: 760px)" : "(max-width: 1100px)",
-    );
-    if (!panel || !media.matches) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const controls = () =>
-      Array.from(
-        panel.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
-        ),
-      ).filter((element) => element.getClientRects().length > 0);
-    controls()[0]?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!media.matches) return;
-      if (event.key === "Escape") {
-        setRailOpen(false);
-        setLedgerOpen(false);
-      }
-      if (event.key === "Tab") {
-        const items = controls();
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [railOpen, ledgerOpen]);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const documentRequestRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!getToken()) {
-      return;
-    }
+    if (!getToken()) return;
     try {
       const [me, srcs, docs, convs, embeds] = await Promise.all([
         api.me(),
         api.sources(),
         api.documents(),
         api.conversations(),
-        api.embedStatus(),
+        api.embedStatus().catch(() => null),
       ]);
       setUser(me);
       setSources(srcs);
       setDocuments(docs);
       setConversations(convs);
-      wasIndexingRef.current = !embeds.ready && embeds.totalChunks > 0;
       setEmbedStatus(embeds);
-    } catch {
-      clearToken();
-      setAuthed(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearToken();
+        setAuthed(false);
+      } else
+        setNotice("Your workspace could not be refreshed. Please try again.");
     }
   }, []);
-
-  const refreshEmbedStatus = useCallback(async () => {
-    if (!getToken()) {
-      return null;
-    }
-    try {
-      const status = await api.embedStatus();
-      if (wasIndexingRef.current && status.ready && status.totalChunks > 0) {
-        setShowReadyBanner(true);
-      }
-      wasIndexingRef.current = !status.ready && status.totalChunks > 0;
-      setEmbedStatus(status);
-      return status;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!showReadyBanner) {
-      return;
-    }
-    const id = window.setTimeout(() => setShowReadyBanner(false), 8000);
-    return () => window.clearTimeout(id);
-  }, [showReadyBanner]);
 
   useEffect(() => {
     setAuthed(!!getToken());
     setReady(true);
   }, []);
-
   useEffect(() => {
-    if (authed) {
-      void load();
-    }
+    if (authed) void load();
   }, [authed, load]);
-
-  const shouldPollEmbeddings = authed && embedStatus !== null && !embedStatus.ready;
+  const indexing = authed && embedStatus !== null && !embedStatus.ready;
+  useEffect(() => {
+    if (!indexing) return;
+    const timer = window.setInterval(() => {
+      void api
+        .embedStatus()
+        .then(setEmbedStatus)
+        .catch(() => undefined);
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [indexing]);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, busy]);
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    }
+  }, [input]);
 
   useEffect(() => {
-    if (!shouldPollEmbeddings) {
-      return;
-    }
-    const id = window.setInterval(() => {
-      void refreshEmbedStatus();
-    }, 2000);
-    return () => window.clearInterval(id);
-  }, [shouldPollEmbeddings, refreshEmbedStatus]);
+    if (!railOpen || !railRef.current) return;
+    const panel = railRef.current;
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () =>
+      Array.from(
+        panel.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]"),
+      ).filter((element) => element.getClientRects().length > 0);
+    controls()[0]?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      // A native modal owns keyboard focus until it closes.
+      if (document.querySelector("dialog[open]")) return;
+      if (event.key === "Escape") setRailOpen(false);
+      if (event.key !== "Tab") return;
+      const items = controls();
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    const media = window.matchMedia("(min-width: 761px)");
+    const closeOnDesktop = () => {
+      if (media.matches) setRailOpen(false);
+    };
+    media.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      media.removeEventListener("change", closeOnDesktop);
+      document.removeEventListener("keydown", handleKey);
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [railOpen]);
 
   const openDocument = useCallback(
     async (id: string, cite?: CitationSource) => {
+      const request = ++documentRequestRef.current;
+      setDocumentOpen(true);
       setDocLoading(true);
-      setLedgerTab("evidence");
-      setRailOpen(false);
-      setLedgerOpen(true);
+      setDocError(null);
+      setOpenDoc(null);
       setActiveCite(cite ?? null);
       try {
         const detail = await api.document(id);
-        setOpenDoc(detail);
+        if (request === documentRequestRef.current) setOpenDoc(detail);
       } catch (err) {
-        setNotice({ message: err instanceof Error ? err.message : "Could not open document", tone: "danger" });
-        setLedgerTab("library");
+        if (request === documentRequestRef.current)
+          setDocError(
+            err instanceof Error
+              ? err.message
+              : "Could not open this document.",
+          );
       } finally {
-        setDocLoading(false);
+        if (request === documentRequestRef.current) setDocLoading(false);
       }
     },
     [],
@@ -212,9 +201,9 @@ export default function Workspace() {
   const send = useCallback(
     async (text?: string) => {
       const question = (text ?? input).trim();
-      if (!question || busy) {
-        return;
-      }
+      if (!question || busy) return;
+      setView("ask");
+      setNotice(null);
       setMessages((prev) => [
         ...prev,
         { id: `u-${Date.now()}`, role: "user", content: question },
@@ -239,13 +228,18 @@ export default function Workspace() {
         ]);
         void load();
       } catch (err) {
+        const content =
+          err instanceof ApiError && err.status === 503
+            ? "Answers are temporarily unavailable. You can still browse your documents in the library."
+            : err instanceof Error
+              ? err.message
+              : "We couldn’t find an answer. Please try again.";
         setMessages((prev) => [
           ...prev,
           {
             id: `e-${Date.now()}`,
             role: "assistant",
-            content:
-              err instanceof Error ? err.message : "Query failed. Try again.",
+            content,
             status: "error",
           },
         ]);
@@ -256,533 +250,459 @@ export default function Workspace() {
     [input, busy, activeConversationId, load],
   );
 
-  const openConversation = useCallback(async (id: string) => {
+  async function openConversation(id: string) {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
     try {
       const detail = await api.conversation(id);
       setActiveConversationId(detail.id);
-      const next: ChatMessage[] = [];
-      for (const item of detail.messages) {
-        next.push({ id: `${item.id}-q`, role: "user", content: item.query });
-        next.push({
-          id: item.id,
-          role: "assistant",
-          content: item.answer,
-          status: item.status,
-          response: {
-            requestId: item.id,
-            conversationId: detail.id,
-            question: item.query,
-            answer: item.answer,
+      setMessages(
+        detail.messages.flatMap((item): ChatMessage[] => [
+          { id: `${item.id}-q`, role: "user", content: item.query },
+          {
+            id: item.id,
+            role: "assistant",
+            content: item.answer,
             status: item.status,
-            confidence: 0,
-            sources: item.sources,
+            response: {
+              requestId: item.id,
+              conversationId: detail.id,
+              question: item.query,
+              answer: item.answer,
+              status: item.status,
+              confidence: 0,
+              sources: item.sources,
+            },
           },
-        });
-      }
-      setMessages(next);
+        ]),
+      );
+      setView("ask");
       setRailOpen(false);
-    } catch (err) {
-      setNotice({ message: err instanceof Error ? err.message : "Could not open conversation", tone: "danger" });
-      setRailOpen(false);
-      setLedgerOpen(true);
+    } catch {
+      setNotice("This conversation could not be opened. Please try again.");
+    } finally {
+      setBusy(false);
     }
-  }, []);
+  }
 
-  const newChat = useCallback(() => {
+  function newChat() {
+    if (busy) return;
     setActiveConversationId(null);
     setMessages([]);
-    setRailOpen(false);
-  }, []);
-
-  const submitIngest = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault();
-      setNotice(null);
-      try {
-        const res = file
-          ? await api.uploadDocument(file, {
-              title: ingest.title || undefined,
-              classification: ingest.classification,
-            })
-          : await api.ingestDocument({
-              title: ingest.title,
-              content: ingest.content,
-              classification: ingest.classification,
-            });
-        setNotice({
-          message: res.created || res.contentChanged
-            ? `Filed “${res.title}” (v${res.version}). Indexing in the background.`
-            : `“${res.title}” is already up to date.`,
-          tone: "info",
-        });
-        setIngest({ title: "", content: "", classification: "internal" });
-        setFile(null);
-        await load();
-        void refreshEmbedStatus();
-      } catch (err) {
-        setNotice({ message: err instanceof Error ? err.message : "Ingest failed", tone: "danger" });
-      }
-    },
-    [file, ingest, load, refreshEmbedStatus],
-  );
-
-  const seed = useCallback(async () => {
+    setInput("");
     setNotice(null);
-    try {
-      const result = await api.seedDemo();
-      setSeedInfo(result);
-      setNotice({ message: `Loaded ${result.documentCount} Northwind records into “${result.sourceName}”. Indexing for semantic search…`, tone: "info" });
-      await load();
-      void refreshEmbedStatus();
-    } catch (err) {
-      setNotice({ message: err instanceof Error ? err.message : "Could not load demo knowledge", tone: "danger" });
-    }
-  }, [load, refreshEmbedStatus]);
-
-  const logout = useCallback(async () => {
+    setView("ask");
+    setRailOpen(false);
+    composerRef.current?.focus();
+  }
+  function showLibrary() {
+    setView("library");
+    setRailOpen(false);
+  }
+  async function logout() {
     try {
       await api.logout();
-    } catch {}
+    } catch {
+      /* Clear the local session even if the API is unavailable. */
+    }
     clearToken();
     setAuthed(false);
     setUser(null);
     setMessages([]);
     setActiveConversationId(null);
-    setSeedInfo(null);
-  }, []);
-
-  const sourceNames = useMemo(
-    () => new Map(sources.map((s) => [s.id, s.name])),
-    [sources],
-  );
-
-  if (!ready) {
-    return null;
+    setRailOpen(false);
+    setDocumentOpen(false);
+    setNotice(null);
+    setView("ask");
+    setDocuments([]);
+    setSources([]);
+    setConversations([]);
+    setEmbedStatus(null);
+    setInput("");
+    setFeedback({});
+  }
+  async function rate(requestId: string, helpful: boolean) {
+    setFeedback((prev) => ({ ...prev, [requestId]: "pending" }));
+    try {
+      await api.feedback({ requestId, helpful });
+      setFeedback((prev) => ({ ...prev, [requestId]: "saved" }));
+    } catch {
+      setFeedback((prev) => {
+        const next = { ...prev };
+        delete next[requestId];
+        return next;
+      });
+      setNotice("Feedback could not be saved. Please try again.");
+    }
   }
 
-  if (!authed) {
-    return (
-      <AuthScreen
-        onAuthed={() => {
-          setAuthed(true);
-          void load();
-        }}
-      />
-    );
-  }
+  if (!ready) return null;
+  if (!authed) return <AuthScreen onAuthed={() => setAuthed(true)} />;
+  const empty = messages.length === 0;
+  const currentTitle = conversations.find(
+    (conversation) => conversation.id === activeConversationId,
+  )?.title;
 
   return (
-    <div
-      className={`desk ${ledgerOpen ? "ledger-open" : ""} ${railOpen ? "rail-open" : ""}`}
-    >
-      {(railOpen || ledgerOpen) && (
-        <button className="drawer-backdrop" aria-label="Close open panel" tabIndex={-1}
-          onClick={() => { setRailOpen(false); setLedgerOpen(false); }} />
+    <div className={`workspace ${railOpen ? "navigation-open" : ""}`}>
+      {railOpen && (
+        <button
+          className="workspace-backdrop"
+          aria-label="Close navigation"
+          tabIndex={-1}
+          onClick={() => setRailOpen(false)}
+        />
       )}
-      <aside className="rail" id="workspace-navigation" ref={railRef} aria-label="Workspace navigation">
-        <div className="brand">
-          <div className="brand-mark">Internal knowledge</div>
-          <div className="rail-heading">
-            <h1>Kiro</h1>
-            <Button variant="secondary"
-            size="small"
-            className="mobile-only rail-toggle"
-              onClick={() => setRailOpen(false)}>Close menu</Button>
-          </div>
-          <p>Answers with a paper trail.</p>
-        </div>
-        <div className="who">
-          <div className="who-name">
-            <strong>{user?.name || user?.role}</strong>
-            <span>{user?.email}</span>
-          </div>
+      <aside
+        className="workspace-sidebar"
+        ref={railRef}
+        id="workspace-navigation"
+        aria-label="Workspace navigation"
+      >
+        <div className="workspace-brand">
+          <span className="workspace-mark">
+            <KiroMark />
+          </span>
+          <span>Kiro</span>
           <Button
+            className="workspace-mobile icon-button"
             variant="secondary"
-            size="small"
-            onClick={() => void logout()}
+            aria-label="Close navigation"
+            onClick={() => setRailOpen(false)}
           >
-            Log out
+            <WorkspaceIcon name="close" />
           </Button>
         </div>
-        <div className="scroll">
-          <div>
-            <Button fullWidth onClick={newChat}>
-              New question
-            </Button>
-          </div>
-          <div>
-            <div className="section-label">Conversations</div>
-            <div className="stack">
-              {conversations.length === 0 && (
-                <p className="muted">Nothing asked yet.</p>
-              )}
-              {conversations.map((c) => (
-                <button
-                  key={c.id}
-                  className={`ticket ${c.id === activeConversationId ? "active" : ""}`}
-                  onClick={() => void openConversation(c.id)}
-                >
-                  <div className="title">{c.title ?? "Untitled"}</div>
-                  <div className="kicker">
-                    {new Date(c.updatedAt).toLocaleString()}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="section-label">Sources</div>
-            <div className="stack">
-              {sources.length === 0 && (
-                <p className="muted">Load the demo or upload a file.</p>
-              )}
-              {sources.map((s) => (
-                <div className="ticket" key={s.id}>
-                  <div className="row">
-                    <span className="title">{s.name}</span>
-                    <Badge tone={s.status === "connected" ? "success" : s.status === "error" ? "danger" : "warning"}>{s.status}</Badge>
-                  </div>
-                  <div className="kicker">
-                    {s.documentCount} records · {s.type.replace("_", " ")}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <nav className="workspace-nav" aria-label="Main">
+          <Button
+            variant="secondary"
+            className="new-question"
+            onClick={newChat}
+            disabled={busy}
+          >
+            <WorkspaceIcon name="plus" />
+            New question
+          </Button>
+          <button
+            className={`nav-item ${view === "ask" ? "selected" : ""}`}
+            aria-current={view === "ask" ? "page" : undefined}
+            onClick={() => {
+              setView("ask");
+              setRailOpen(false);
+            }}
+          >
+            <WorkspaceIcon name="message" />
+            Ask Kiro
+          </button>
+          <button
+            className={`nav-item ${view === "library" ? "selected" : ""}`}
+            aria-current={view === "library" ? "page" : undefined}
+            onClick={showLibrary}
+          >
+            <WorkspaceIcon name="book" />
+            Library<span className="nav-count">{documents.length || ""}</span>
+          </button>
+        </nav>
+        <div className="workspace-recents">
+          <h2>Recent conversations</h2>
+          {conversations.length === 0 ? (
+            <p>A little clarity starts with a question.</p>
+          ) : (
+            conversations.map((conversation) => (
+              <button
+                key={conversation.id}
+                className={
+                  conversation.id === activeConversationId && view === "ask"
+                    ? "active"
+                    : ""
+                }
+                onClick={() => void openConversation(conversation.id)}
+                disabled={busy}
+                title={conversation.title ?? "Untitled question"}
+              >
+                {conversation.title ?? "Untitled question"}
+              </button>
+            ))
+          )}
         </div>
+        {user && <AccountProfile user={user} onLogout={logout} />}
       </aside>
 
-      <main className="stage">
-        <div className="stage-head">
-          <Button
-            variant="secondary"
-            size="small"
-            className="mobile-only rail-toggle"
-            aria-expanded={railOpen}
-            aria-controls="workspace-navigation"
-            onClick={() => {
-              setLedgerOpen(false);
-              setRailOpen((v) => !v);
-            }}
-          >
-            Menu
-          </Button>
-          <h2>
-            {activeConversationId
-              ? (conversations.find((c) => c.id === activeConversationId)
-                  ?.title ?? "Conversation")
-              : "New question"}
-          </h2>
-          <Button
-            variant="secondary"
-            size="small"
-            className="mobile-only ledger-toggle"
-            aria-expanded={ledgerOpen}
-            aria-controls="source-ledger"
-            onClick={() => {
-              setRailOpen(false);
-              setLedgerOpen((v) => !v);
-            }}
-          >
-            Open ledger
-          </Button>
-        </div>
-
-        {embedStatus && embedStatus.totalChunks > 0 && !embedStatus.ready && (
-          <div className="index-banner pending" role="status">
-            Indexing knowledge… {embedStatus.embeddedChunks}/
-            {embedStatus.totalChunks} chunks ready. Keyword search works now;
-            wait for semantic search before the best answers.
+      <main className="workspace-main" inert={railOpen || undefined}>
+        <header className="workspace-header">
+          <div>
+            <Button
+              variant="secondary"
+              className="workspace-mobile icon-button"
+              aria-label="Open navigation"
+              aria-expanded={railOpen}
+              aria-controls="workspace-navigation"
+              onClick={() => setRailOpen(true)}
+            >
+              <WorkspaceIcon name="menu" />
+            </Button>
+            <span>
+              {view === "library"
+                ? "Knowledge library"
+                : currentTitle || "Your workspace"}
+            </span>
+          </div>
+          <button className="workspace-library-link" onClick={showLibrary}>
+            <WorkspaceIcon name="book" />
+            <span>
+              {documents.length} document{documents.length === 1 ? "" : "s"}
+            </span>
+          </button>
+        </header>
+        {notice && (
+          <div className="workspace-notice">
+            <Alert tone="danger">
+              {notice}
+              <button
+                className="dismiss-notice"
+                aria-label="Dismiss message"
+                onClick={() => setNotice(null)}
+              >
+                <WorkspaceIcon name="close" />
+              </button>
+            </Alert>
           </div>
         )}
-        {showReadyBanner && embedStatus?.ready && (
-          <div className="index-banner ready" role="status">
-            Knowledge ready — {embedStatus.embeddedChunks} chunks indexed for
-            hybrid search.
-          </div>
-        )}
-
-        <div className="chat">
-          {messages.length === 0 && (
-            <div className="empty-ask">
-              <h2>What does the company already know?</h2>
-              <p>
-                Ask a factual question. The brain only answers from documents
-                you can see, and shows the source beside the answer.
-              </p>
-              <div className="prompts">
-                {PROMPTS.map((q) => (
-                  <button
-                    key={q}
-                    className="prompt"
-                    onClick={() => void send(q)}
-                  >
-                    {q}
-                  </button>
-                ))}
+        {view === "library" ? (
+          <KnowledgeLibrary
+            documents={documents}
+            sources={sources}
+            embedStatus={embedStatus}
+            onOpen={(id) => void openDocument(id)}
+            onRefresh={load}
+          />
+        ) : (
+          <div
+            className={`question-view ${empty ? "is-empty" : "has-messages"}`}
+          >
+            {empty ? (
+              <div className="question-welcome">
+                <span className="welcome-eyebrow">
+                  <span className="welcome-emblem">
+                    <KiroMark />
+                  </span>
+                  A little clarity for your day
+                </span>
+                <h1>
+                  What would you
+                  <br />
+                  like to know?
+                </h1>
+                <p>Find the answer. Know where it came from.</p>
               </div>
-            </div>
-          )}
-
-          {messages.map((m) => (
-            <div className={`msg ${m.role}`} key={m.id}>
-              {m.role === "user" ? (
-                m.content
-              ) : (
-                <>
-                  {m.status && (
-                    <div className="meta-line">
-                      <Badge tone={m.status === "answered" ? "success" : m.status === "error" ? "danger" : "warning"}>{m.status}</Badge>
-                      {m.response && (
-                        <span className="muted">
-                          {m.response.sources.length} source
-                          {m.response.sources.length === 1 ? "" : "s"}
-                        </span>
+            ) : (
+              <div className="conversation-scroll">
+                <div className="conversation-content">
+                  {messages.map((message, index) => (
+                    <article
+                      className={`conversation-message ${message.role} ${message.status === "error" ? "has-error" : ""}`}
+                      key={message.id}
+                    >
+                      {message.role === "user" ? (
+                        <h2>{message.content}</h2>
+                      ) : message.status === "error" ? (
+                        <div className="answer-error" role="alert">
+                          <span className="answer-label">Unable to answer</span>
+                          <p>{message.content}</p>
+                          <div>
+                            <button
+                              onClick={() =>
+                                void send(messages[index - 1]?.content)
+                              }
+                              disabled={busy}
+                            >
+                              Try again
+                            </button>
+                            <button onClick={showLibrary}>
+                              Browse library
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="answer-byline">
+                            <KiroMark />
+                            <span>Kiro</span>
+                            {message.status &&
+                              message.status !== "answered" && (
+                                <span className="answer-status">
+                                  {message.status === "unknown"
+                                    ? "No matching answer"
+                                    : message.status === "partial"
+                                      ? "Partial answer"
+                                      : "Sources differ"}
+                                </span>
+                              )}
+                          </div>
+                          <div className="answer">
+                            {renderAnswer(
+                              message.content,
+                              message.response?.sources,
+                              (cite) =>
+                                void openDocument(cite.documentId, cite),
+                            )}
+                          </div>
+                          {!!message.response?.sources.length && (
+                            <div className="answer-sources">
+                              {message.response.sources.map((source, i) => (
+                                <button
+                                  key={`${source.documentId}-${i}`}
+                                  onClick={() =>
+                                    void openDocument(source.documentId, source)
+                                  }
+                                >
+                                  <span>{i + 1}</span>
+                                  {source.title}
+                                  <WorkspaceIcon
+                                    name="chevron"
+                                    width="12"
+                                    height="12"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {message.response && (
+                            <div className="answer-feedback">
+                              {feedback[message.id] === "saved" ? (
+                                <span role="status">
+                                  Thanks for your feedback.
+                                </span>
+                              ) : (
+                                <>
+                                  <span>Was this helpful?</span>
+                                  <button
+                                    disabled={!!feedback[message.id]}
+                                    onClick={() => void rate(message.id, true)}
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    disabled={!!feedback[message.id]}
+                                    onClick={() => void rate(message.id, false)}
+                                  >
+                                    No
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
-                    </div>
+                    </article>
+                  ))}
+                  {busy && (
+                    <p className="answer-loading" role="status">
+                      <span className="status-dot" />
+                      Finding the right sources…
+                    </p>
                   )}
-                  <div className="answer">
-                    {renderAnswer(
-                      m.content,
-                      m.response?.sources,
-                      (cite) => void openDocument(cite.documentId, cite),
+                  <div ref={chatEndRef} />
+                </div>
+              </div>
+            )}
+            <div className="question-entry">
+              <form
+                className="question-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void send();
+                }}
+              >
+                <Textarea
+                  ref={composerRef}
+                  aria-label="Ask a question"
+                  placeholder={
+                    empty
+                      ? "Ask anything about your company…"
+                      : "Ask a follow-up question…"
+                  }
+                  rows={2}
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
+                  disabled={busy}
+                />
+                <div className="composer-toolbar">
+                  <span>
+                    <WorkspaceIcon name="lock" width="13" height="13" />
+                    Connected to your library
+                  </span>
+                  <StatefulButton
+                    loading={busy}
+                    variant="primary"
+                    type="submit"
+                    className="send-question"
+                    aria-label={busy ? "Finding an answer" : "Send question"}
+                    disabled={busy || !input.trim()}
+                  >
+                    {!busy && (
+                      <WorkspaceIcon name="arrow" width="20" height="20" />
                     )}
-                  </div>
-                  {m.response && m.response.sources.length > 0 && (
-                    <div className="citations">
-                      {m.response.sources.map((s, i) => (
-                        <button
-                          className={`citation ${activeCite?.documentId === s.documentId ? "active" : ""}`}
-                          key={`${m.id}-${s.documentId}-${i}`}
-                          onClick={() => void openDocument(s.documentId, s)}
-                        >
-                          <div className="title">
-                            [{i + 1}] {s.title}
-                          </div>
-                          <div className="meta">
-                            {s.sourceName} · v{s.version} · {s.classification}
-                          </div>
-                          <div className="excerpt">{s.excerpt}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {m.response && (
-                    <div className="actions">
-                      <Button
-                        variant="secondary"
-                        size="small"
-                        onClick={() =>
-                          void api.feedback({
-                            requestId: m.response!.requestId,
-                            helpful: true,
-                          })
-                        }
-                      >
-                        Helpful
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="small"
-                        onClick={() =>
-                          void api.feedback({
-                            requestId: m.response!.requestId,
-                            helpful: false,
-                          })
-                        }
-                      >
-                        Not helpful
-                      </Button>
-                    </div>
-                  )}
-                </>
+                  </StatefulButton>
+                </div>
+              </form>
+              {empty ? (
+                <div className="question-suggestions">
+                  {PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt.label}
+                      onClick={() => {
+                        setInput(prompt.query);
+                        composerRef.current?.focus();
+                      }}
+                    >
+                      <WorkspaceIcon name={prompt.icon} />
+                      <span>{prompt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="composer-note">
+                  Answers link to the sources you can access.
+                </p>
               )}
             </div>
-          ))}
-
-          {busy && (
-            <div className="msg assistant">
-              <div className="spinner" role="status">
-                Retrieving authorized evidence…
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="composer">
-          <div className="composer-box">
-            <Input
-              aria-label="Ask a question"
-              placeholder="Ask about a policy, a client, a decision…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  void send();
-                }
-              }}
-              disabled={busy}
-            />
-            <Button variant="primary" onClick={() => void send()} disabled={busy || !input.trim()}>
-              Ask
-            </Button>
+            {empty && (
+              <p className="welcome-footnote">
+                <WorkspaceIcon name="lock" width="12" height="12" />
+                Answers grounded in your team’s knowledge.
+              </p>
+            )}
           </div>
-        </div>
+        )}
       </main>
-
-      <aside className="ledger" id="source-ledger" ref={ledgerRef} aria-label="Source ledger">
-        <div className="ledger-head">
-          <div className="ledger-heading">
-            <h2>{ledgerTab === "library" ? "Library" : "Evidence"}</h2>
-            <Button variant="secondary"
-            size="small"
-            className="mobile-only ledger-toggle"
-              onClick={() => setLedgerOpen(false)} aria-label="Close ledger">Close</Button>
-          </div>
-          <div className="tabs" aria-label="Source ledger views">
-            <button
-              aria-pressed={ledgerTab === "library"}
-              className={ledgerTab === "library" ? "active" : ""}
-              onClick={() => setLedgerTab("library")}
-            >
-              Library
-            </button>
-            <button
-              aria-pressed={ledgerTab === "evidence"}
-              className={ledgerTab === "evidence" ? "active" : ""}
-              onClick={() => setLedgerTab("evidence")}
-            >
-              Evidence
-            </button>
-          </div>
-        </div>
-
-        {ledgerTab === "evidence" ? (
+      <Dialog
+        open={documentOpen}
+        onClose={() => setDocumentOpen(false)}
+        title={activeCite ? "Answer source" : "Document"}
+        className="document-dialog"
+      >
+        {docError ? (
+          <Alert tone="danger">{docError}</Alert>
+        ) : (
           <EvidencePanel
             document={openDoc}
             citation={activeCite}
             loading={docLoading}
-            onClose={() => {
-              setOpenDoc(null);
-              setActiveCite(null);
-              setLedgerTab("library");
-            }}
           />
-        ) : (
-          <div className="scroll">
-            <Button variant="primary" fullWidth onClick={() => void seed()}>
-              Load Northwind demo
-            </Button>
-            {seedInfo?.viewer && (
-              <div className="viewer-card">
-                <div className="section-label">Permission check</div>
-                <p>
-                  Sign in as the employee to see what they cannot. They will not
-                  see compensation bands or the board cash note.
-                </p>
-                <p style={{ marginTop: 8 }}>
-                  <code>{seedInfo.viewer.email}</code>
-                  <br />
-                  <code>{seedInfo.viewer.password}</code>
-                </p>
-              </div>
-            )}
-
-            <form className="form" onSubmit={(e) => void submitIngest(e)}>
-              <div className="section-label">File a record</div>
-              <div className="drop">
-                PDF, Markdown, text, or CSV
-                <Input
-                  aria-label="Upload a document"
-                  type="file"
-                  accept=".pdf,.md,.txt,.csv,text/plain,text/markdown,text/csv,application/pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-                {file && <div className="kicker">{file.name}</div>}
-              </div>
-              <Field label="Record title">
-                {(field) => (
-                  <Input
-                    {...field}
-                    placeholder={file ? "Title (optional)" : "Title"}
-                    value={ingest.title}
-                    onChange={(e) =>
-                      setIngest({ ...ingest, title: e.target.value })
-                    }
-                    required={!file}
-                  />
-                )}
-              </Field>
-              {!file && (
-                <Field label="Document text">
-                  {(field) => (
-                    <Textarea
-                      {...field}
-                      placeholder="Or paste the document here"
-                      value={ingest.content}
-                      onChange={(e) =>
-                        setIngest({ ...ingest, content: e.target.value })
-                      }
-                      required
-                    />
-                  )}
-                </Field>
-              )}
-              <Field label="Classification">
-                {(field) => (
-                  <Select
-                    {...field}
-                    value={ingest.classification}
-                    onChange={(e) =>
-                      setIngest({ ...ingest, classification: e.target.value })
-                    }
-                  >
-                    <option value="public">Public</option>
-                    <option value="internal">Internal</option>
-                    <option value="confidential">
-                      Confidential — managers
-                    </option>
-                    <option value="restricted">Restricted — you only</option>
-                  </Select>
-                )}
-              </Field>
-              <Button variant="secondary" type="submit">
-                {file ? "Upload and index" : "File this text"}
-              </Button>
-              {notice && (
-                <Alert tone={notice.tone}>{notice.message}</Alert>
-              )}
-            </form>
-
-            <div>
-              <div className="section-label">Documents you can see</div>
-              <div className="stack">
-                {documents.length === 0 && (
-                  <p className="muted">Nothing in the library yet.</p>
-                )}
-                {documents.map((d) => (
-                  <button
-                    className="ticket"
-                    key={d.id}
-                    onClick={() => void openDocument(d.id)}
-                  >
-                    <div className="row">
-                      <span className="title">{d.title}</span>
-                      <Badge className={d.classification}>
-                        {d.classification}
-                      </Badge>
-                    </div>
-                    <div className="kicker">
-                      {sourceNames.get(d.sourceId) ?? "Source"} · v
-                      {d.versionCount}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         )}
-      </aside>
+      </Dialog>
     </div>
   );
 }
@@ -792,27 +712,20 @@ function renderAnswer(
   sources: CitationSource[] | undefined,
   onCite: (source: CitationSource) => void,
 ) {
-  const parts = text.split(/(\[\d+\])/g);
-  return parts.map((part, i) => {
+  return text.split(/(\[\d+\])/g).map((part, index) => {
     const match = part.match(/^\[(\d+)\]$/);
-    if (!match) {
-      return <span key={i}>{part}</span>;
-    }
-    const idx = Number(match[1]) - 1;
-    const source = sources?.[idx];
-    if (!source) {
-      return <span key={i}>{part}</span>;
-    }
-    return (
+    const source = match ? sources?.[Number(match[1]) - 1] : undefined;
+    return source ? (
       <button
-        key={i}
+        key={index}
         className="cite-chip"
-        aria-label={`Show source ${match[1]}: ${source.title}`}
+        aria-label={`Open source ${match![1]}: ${source.title}`}
         onClick={() => onCite(source)}
-        type="button"
       >
-        {match[1]}
+        {match![1]}
       </button>
+    ) : (
+      <span key={index}>{part}</span>
     );
   });
 }
