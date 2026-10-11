@@ -223,7 +223,7 @@ Clone the repo:
 
 ```bash
 mkdir -p /opt && cd /opt
-git clone https://github.com/YOUR_USER/kiro.git
+git clone https://github.com/codealisha99/kiro.git
 cd kiro
 ```
 

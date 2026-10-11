@@ -11,9 +11,11 @@ import { api, setToken } from "@/lib/api";
 export default function AuthScreen({
   onAuthed,
   initialMode = "login",
+  sessionExpired = false,
 }: {
   onAuthed: () => void;
   initialMode?: "login" | "register";
+  sessionExpired?: boolean;
 }) {
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -34,12 +36,15 @@ export default function AuthScreen({
     try {
       const res =
         mode === "login"
-          ? await api.login({ email: form.email, password: form.password })
-          : await api.register({
-              tenantName: form.tenantName,
-              email: form.email,
+          ? await api.login({
+              email: form.email.trim(),
               password: form.password,
-              name: form.name || undefined,
+            })
+          : await api.register({
+              tenantName: form.tenantName.trim(),
+              email: form.email.trim(),
+              password: form.password,
+              name: form.name.trim() || undefined,
             });
       setToken(res.tokens.accessToken);
       onAuthed();
@@ -65,7 +70,7 @@ export default function AuthScreen({
           </h1>
           <p className="signin-story-description">
             The policies, processes, and context your team needs. One place to
-            ask. A source for every answer.
+            ask. The evidence close by.
           </p>
           <div
             className="signin-photo"
@@ -98,6 +103,11 @@ export default function AuthScreen({
               : "Create a workspace for what your team knows."}
           </p>
 
+          {sessionExpired && (
+            <Alert>
+              Your session has expired. Sign in to return to your desk.
+            </Alert>
+          )}
           {error && <Alert tone="danger">{error}</Alert>}
 
           <form className="form signin-form" onSubmit={submit}>
@@ -122,7 +132,7 @@ export default function AuthScreen({
                     <Input
                       {...field}
                       autoComplete="name"
-                      placeholder="How should we call you?"
+                      placeholder="What should we call you?"
                       value={form.name}
                       onChange={(e) =>
                         setForm({ ...form, name: e.target.value })
@@ -164,7 +174,7 @@ export default function AuthScreen({
                         ? "Enter your password"
                         : "Choose a password"
                     }
-                    minLength={8}
+                    minLength={mode === "register" ? 8 : undefined}
                     value={form.password}
                     onChange={(e) =>
                       setForm({ ...form, password: e.target.value })
@@ -184,7 +194,13 @@ export default function AuthScreen({
                 </div>
               )}
             </Field>
-            <Button variant="primary" fullWidth type="submit" disabled={busy}>
+            <Button
+              variant="primary"
+              fullWidth
+              type="submit"
+              disabled={busy}
+              aria-busy={busy}
+            >
               {busy
                 ? "Please wait…"
                 : mode === "login"

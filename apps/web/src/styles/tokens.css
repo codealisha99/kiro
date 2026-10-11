@@ -23,6 +23,8 @@
   --color-warning-soft: #fff1da;
   --color-danger: #a12f35;
   --color-danger-hover: #84262b;
+  --color-on-danger: #ffffff;
+  --color-on-marker: #ffffff;
   --color-overlay: rgb(8 14 22 / 45%);
   --color-cover-text: #fafbf7;
   --color-cover-muted: #d1d9d1;
@@ -59,6 +61,8 @@
   --shadow-panel: 0 12px 32px rgb(23 43 41 / 7%);
   --shadow-overlay: 0 24px 60px rgb(8 14 22 / 25%);
   --content-width: 1120px;
+  --reading-width: 680px;
+  --page-gutter: clamp(20px, 4vw, 48px);
 }
 
 [data-theme="dark"] {
@@ -85,6 +89,8 @@
   --color-warning-soft: #433924;
   --color-danger: #f2a4a8;
   --color-danger-hover: #ffc1c4;
+  --color-on-danger: #14201e;
+  --color-on-marker: #14201e;
   --color-danger-soft: #462b2e;
   --shadow-panel: 0 12px 32px rgb(0 0 0 / 18%);
 }

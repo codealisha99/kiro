@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { DocumentListItem, EmbedStatus, SourceDto } from "@kiro/shared";
 import {
@@ -23,19 +23,22 @@ export default function KnowledgeLibrary({
   embedStatus,
   onOpen,
   onRefresh,
-  initialAdding = false,
+  addRequest = 0,
 }: {
   documents: DocumentListItem[];
   sources: SourceDto[];
   embedStatus: EmbedStatus | null;
   onOpen: (id: string) => void;
   onRefresh: () => Promise<void>;
-  initialAdding?: boolean;
+  addRequest?: number;
 }) {
   const [access, setAccess] = useState("all");
   const [sort, setSort] = useState("updated");
   const [search, setSearch] = useState("");
-  const [adding, setAdding] = useState(initialAdding);
+  const [adding, setAdding] = useState(addRequest > 0);
+  useEffect(() => {
+    if (addRequest > 0) setAdding(true);
+  }, [addRequest]);
   const [mode, setMode] = useState<"file" | "text">("file");
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -54,7 +57,7 @@ export default function KnowledgeLibrary({
       (doc) =>
         `${doc.title} ${names.get(doc.sourceId) ?? ""}`
           .toLowerCase()
-          .includes(search.toLowerCase()) &&
+          .includes(search.trim().toLowerCase()) &&
         (access === "all" || doc.classification === access),
     )
     .sort((a, b) =>
@@ -72,10 +75,14 @@ export default function KnowledgeLibrary({
       const result =
         mode === "file" && file
           ? await api.uploadDocument(file, {
-              title: title || undefined,
+              title: title.trim() || undefined,
               classification,
             })
-          : await api.ingestDocument({ title, content, classification });
+          : await api.ingestDocument({
+              title: title.trim(),
+              content: content.trim(),
+              classification,
+            });
       setNotice(`“${result.title}” added to your library.`);
       setAdding(false);
       setFile(null);
@@ -156,7 +163,7 @@ export default function KnowledgeLibrary({
           >
             <option value="all">All access levels</option>
             <option value="internal">Workspace</option>
-            <option value="public">Public</option>
+            <option value="public">Public within workspace</option>
             <option value="confidential">Confidential</option>
             <option value="restricted">Only you</option>
           </Select>
@@ -172,7 +179,7 @@ export default function KnowledgeLibrary({
       </div>
       <div className="library-list-heading">
         <span>Documents</span>
-        <span className="library-count">
+        <span className="library-count" role="status">
           {filtered.length === documents.length
             ? `${documents.length} document${documents.length === 1 ? "" : "s"}`
             : `${filtered.length} of ${documents.length} documents`}
@@ -330,7 +337,10 @@ export default function KnowledgeLibrary({
               )}
             </Field>
           )}
-          <Field label="Who can access this?">
+          <Field
+            label="Who can access this?"
+            hint="All access levels stay within your workspace. Public does not publish a document on the internet."
+          >
             {(field) => (
               <Select
                 {...field}
@@ -338,7 +348,7 @@ export default function KnowledgeLibrary({
                 onChange={(event) => setClassification(event.target.value)}
               >
                 <option value="internal">Everyone in your workspace</option>
-                <option value="public">Public</option>
+                <option value="public">Public within workspace</option>
                 <option value="confidential">
                   Managers and administrators
                 </option>

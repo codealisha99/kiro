@@ -123,3 +123,13 @@ The desk uses a framed reading canvas and a quiet sidebar. A new workspace start
 ## Sign-in composition — 2026-10-11
 
 Sign-in and registration use a split composition: an editorial brand panel with a contained cover photograph, and a dedicated form area. On mobile, the brand reduces to a compact header so the form stays primary. Composition lives in `components/auth-screen.css`; fields and buttons continue to use shared primitives. Password visibility is an explicit native control, switching modes clears stale errors and the password, and both sections provide a route back to the marketing page.
+
+## Product audit refinements — 2026-10-11
+
+Preserve the established editorial direction. Public navigation includes legitimate maintainer and repository links. Recovery screens use the same serif hierarchy, teal actions, and paper surface. The admin overview uses a readable access/retry panel and an honest empty failure state; service-metric failures remain visible.
+
+`--reading-width` is 680px and `--page-gutter` scales from 20 to 48px. Dedicated `--color-on-danger` and `--color-on-marker` foregrounds keep danger actions and source chips readable in both themes. The reference shows actual light/dark HEX values, including danger. The application remains light; dark is a scoped design preview.
+
+Document classifications are workspace scoped. Public does not mean publicly accessible on the internet; restricted documents use owner or explicit access grants. Upload guidance explains this without altering API classification values.
+
+The original cover photograph remains unchanged; its source and rights have not been established by this audit. Verify them before publishing.

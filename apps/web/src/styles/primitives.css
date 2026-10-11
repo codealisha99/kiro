@@ -97,7 +97,7 @@
 }
 .btn.danger {
   background: var(--danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-danger);
 }
 .btn.danger:hover {
   background: var(--color-danger-hover);
@@ -253,8 +253,10 @@ pre {
 .ui-dialog-header h2 {
   font-size: var(--text-lg);
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 .ui-dialog-close.btn {
+  flex: none;
   padding: var(--space-2);
   border-color: transparent;
 }

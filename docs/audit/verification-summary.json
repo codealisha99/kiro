@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-11",
+  "typecheck": "passed",
+  "lint": "passed, zero warnings",
+  "tests": {
+    "referenceApi": 71,
+    "webTransport": 7,
+    "failed": 0
+  },
+  "productionBuild": "passed: shared, reference API, web",
+  "prismaGenerate": "passed; no migration",
+  "pythonCompile": "passed",
+  "browserStates": 7,
+  "viewportChecks": 35,
+  "viewportWidths": [
+    320,
+    390,
+    768,
+    1440,
+    1600
+  ],
+  "axeViolations": 0,
+  "contrastPairs": 20,
+  "dependencyAdvisories": {
+    "moderate": 1,
+    "high": 0,
+    "critical": 0
+  },
+  "ci": "YAML validated; remote execution unverified",
+  "limitations": [
+    "Java runtime and Maven unavailable",
+    "Docker daemon stopped",
+    "No local live API or database integration checks",
+    "Signed-in visual and functional workflows blocked",
+    "Root error boundary not forced in browser"
+  ],
+  "git": "Uncommitted changes only; no push/deploy/history rewrite"
+}

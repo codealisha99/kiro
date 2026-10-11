@@ -20,11 +20,12 @@ import "./design-system.css";
 
 const sections = ["Foundations", "Typography", "Components", "In context"];
 const colors = [
-  ["Canvas", "--color-canvas", "#e3e7df"],
-  ["Paper", "--color-surface", "#f2f4ee"],
-  ["Ink", "--color-text", "#172b29"],
-  ["Teal", "--color-accent", "#0a5c63"],
-  ["Source", "--color-marker", "#ad4121"],
+  ["Canvas", "--color-canvas", "#e3e7df", "#14201e"],
+  ["Paper", "--color-surface", "#f2f4ee", "#1c2b28"],
+  ["Ink", "--color-text", "#172b29", "#eef2e9"],
+  ["Teal", "--color-accent", "#0a5c63", "#8accca"],
+  ["Source", "--color-marker", "#ad4121", "#f0a07c"],
+  ["Danger", "--color-danger", "#a12f35", "#f2a4a8"],
 ];
 
 export default function DesignSystemPage() {
@@ -60,7 +61,10 @@ export default function DesignSystemPage() {
         </div>
       </aside>
 
-      <main className="system-main">
+      <a className="skip-link" href="#system-content">
+        Skip to design reference
+      </a>
+      <main className="system-main" id="system-content" tabIndex={-1}>
         <header className="system-top">
           <span className="kicker">KIRO / DESIGN SYSTEM</span>
           <Button
@@ -104,13 +108,11 @@ export default function DesignSystemPage() {
             </p>
           </div>
           <div className="system-swatches">
-            {colors.map(([name, token, hex]) => (
+            {colors.map(([name, token, hex, darkHex]) => (
               <div className="system-swatch" key={name}>
                 <div style={{ background: `var(${token})` }} />
                 <strong>{name}</strong>
-                <code>
-                  {dark ? token.replace("--color-", "") + " / dark" : hex}
-                </code>
+                <code>{dark ? darkHex : hex}</code>
               </div>
             ))}
           </div>
@@ -197,6 +199,25 @@ export default function DesignSystemPage() {
             </p>
           </div>
           <div className="system-component-grid">
+            <Card>
+              <h3>Access and recovery</h3>
+              <p className="muted">
+                Explain what happened and offer a useful next action.
+              </p>
+              <div className="system-alerts">
+                <Alert>
+                  Your session has expired. Sign in to return to your desk.
+                </Alert>
+                <Alert tone="danger">
+                  We couldn’t reach Kiro. Check your connection and try again.
+                </Alert>
+              </div>
+              <div className="system-component-row">
+                <Button variant="primary" onClick={() => setDialogOpen(true)}>
+                  Review dialog
+                </Button>
+              </div>
+            </Card>
             <Card>
               <h3>Actions</h3>
               <p className="muted">One primary action per task.</p>

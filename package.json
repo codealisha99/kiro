@@ -10,7 +10,17 @@
       "@prisma/engines",
       "prisma",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "proxy-addr": "^2.0.8",
+      "multer": "^2.4.0",
+      "lodash": "^4.18.0",
+      "postcss": "^8.5.23",
+      "qs": "^6.16.0",
+      "body-parser": "^1.20.6",
+      "deepmerge-ts": "^8.0.0",
+      "file-type": "^21.3.2"
+    }
   },
   "engines": {
     "node": ">=20"
@@ -29,5 +39,17 @@
     "railway": "^3.13.1",
     "turbo": "^2.3.3",
     "typescript": "^5.6.3"
+  },
+  "description": "Kiro \u2014 a permission-aware company knowledge desk with source-backed answers.",
+  "author": {
+    "name": "Alisha Karma",
+    "url": "https://alishakarma.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codealisha99/kiro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codealisha99/kiro/issues"
   }
 }

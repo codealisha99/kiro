@@ -18,6 +18,7 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const TOKEN_KEY = "kiro-token";
+export const SESSION_EXPIRED_EVENT = "kiro:session-expired";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") {
@@ -52,22 +53,47 @@ async function readError(res: Response): Promise<string> {
     } else if (data.message) {
       detail = data.message;
     }
-  } catch {
-  }
+  } catch {}
   return detail;
+}
+
+async function sendRequest(
+  path: string,
+  options: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(`${API_URL}${path}`, options);
+  } catch {
+    throw new Error(
+      "We couldn’t reach Kiro. Check your connection and try again.",
+    );
+  }
+}
+
+function expireSession(path: string, token: string | null) {
+  if (
+    path === "/auth/login" ||
+    path === "/auth/register" ||
+    getToken() !== token
+  )
+    return;
+  clearToken();
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
 }
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const token = getToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await sendRequest(path, {
     method: options.method ?? "GET",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -76,7 +102,7 @@ async function request<T>(
   if (!res.ok) {
     const detail = await readError(res);
     if (res.status === 401) {
-      clearToken();
+      expireSession(path, token);
     }
     throw new ApiError(res.status, detail);
   }
@@ -89,7 +115,7 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await sendRequest(path, {
     method: "POST",
     headers,
     body: form,
@@ -97,7 +123,7 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
   if (!res.ok) {
     const detail = await readError(res);
     if (res.status === 401) {
-      clearToken();
+      expireSession(path, token);
     }
     throw new ApiError(res.status, detail);
   }
@@ -125,9 +151,11 @@ export const api = {
     title: string;
     content: string;
     classification?: string;
-  }) =>
-    request<IngestDocumentResponse>("/documents", { method: "POST", body }),
-  uploadDocument: (file: File, extras: { title?: string; classification?: string }) => {
+  }) => request<IngestDocumentResponse>("/documents", { method: "POST", body }),
+  uploadDocument: (
+    file: File,
+    extras: { title?: string; classification?: string },
+  ) => {
     const form = new FormData();
     form.append("file", file);
     if (extras.title) {
@@ -138,13 +166,18 @@ export const api = {
     }
     return requestForm<IngestDocumentResponse>("/documents/upload", form);
   },
-  seedDemo: () => request<DemoSeedResponse>("/documents/demo", { method: "POST" }),
+  seedDemo: () =>
+    request<DemoSeedResponse>("/documents/demo", { method: "POST" }),
   embedStatus: () => request<EmbedStatus>("/documents/embed-status"),
 
   conversations: () => request<ConversationDto[]>("/conversations"),
-  conversation: (id: string) => request<ConversationDetail>(`/conversations/${id}`),
+  conversation: (id: string) =>
+    request<ConversationDetail>(`/conversations/${id}`),
   createConversation: (title?: string) =>
-    request<ConversationDto>("/conversations", { method: "POST", body: { title } }),
+    request<ConversationDto>("/conversations", {
+      method: "POST",
+      body: { title },
+    }),
 
   invite: (body: InviteUserRequest) =>
     request<UserDto>("/users/invite", { method: "POST", body }),
@@ -153,13 +186,54 @@ export const api = {
     request<{ ok: boolean }>("/feedback", { method: "POST", body }),
 
   documentVersions: (id: string) =>
-    request<{ id: string; documentId: string; version: number; contentHash: string; filename: string | null; approvalStatus: string; createdAt: string }[]>(`/documents/${id}/versions`),
+    request<
+      {
+        id: string;
+        documentId: string;
+        version: number;
+        contentHash: string;
+        filename: string | null;
+        approvalStatus: string;
+        createdAt: string;
+      }[]
+    >(`/documents/${id}/versions`),
   deleteDocument: (id: string) =>
     request<{ ok: boolean }>(`/documents/${id}`, { method: "DELETE" }),
-  revokeAcl: (id: string, body: { principalType: string; principalId: string }) =>
-    request<{ ok: boolean }>(`/documents/${id}/revoke`, { method: "POST", body }),
-  metrics: () => request<{ counters: Record<string, number>; latencies: Record<string, { count: number; avgMs: number; errors: number }>; uptimeSeconds: number }>("/metrics"),
-  adminMetrics: () => request<{ queries: number; feedback: { helpful: boolean; _count: number }[]; recentErrors: unknown[] }>("/admin/metrics"),
-  evalRetrieval: () => request<{ total: number; hits: number; hitRate: number; results: unknown[] }>("/evals/retrieval"),
-  evalRag: () => request<{ total: number; ok: number; accuracy: number; results: unknown[] }>("/evals/rag"),
+  revokeAcl: (
+    id: string,
+    body: { principalType: string; principalId: string },
+  ) =>
+    request<{ ok: boolean }>(`/documents/${id}/revoke`, {
+      method: "POST",
+      body,
+    }),
+  metrics: () =>
+    request<{
+      counters: Record<string, number>;
+      latencies: Record<
+        string,
+        { count: number; avgMs: number; errors: number }
+      >;
+      uptimeSeconds: number;
+    }>("/metrics"),
+  adminMetrics: () =>
+    request<{
+      queries: number;
+      feedback: { helpful: boolean; _count: number }[];
+      recentErrors: unknown[];
+    }>("/admin/metrics"),
+  evalRetrieval: () =>
+    request<{
+      total: number;
+      hits: number;
+      hitRate: number;
+      results: unknown[];
+    }>("/evals/retrieval"),
+  evalRag: () =>
+    request<{
+      total: number;
+      ok: number;
+      accuracy: number;
+      results: unknown[];
+    }>("/evals/rag"),
 };

@@ -231,7 +231,7 @@
 .question-welcome,
 .question-entry {
   width: 100%;
-  max-width: 680px;
+  max-width: var(--reading-width);
   margin-inline: auto;
 }
 .question-welcome {
@@ -348,7 +348,7 @@
   padding: var(--space-8) var(--space-8) var(--space-6);
 }
 .conversation-content {
-  max-width: 680px;
+  max-width: var(--reading-width);
   margin-inline: auto;
 }
 .conversation-message {
@@ -1449,12 +1449,12 @@
   max-width: 100%;
 }
 .has-messages .question-composer {
-  max-width: 680px;
+  max-width: var(--reading-width);
   margin-inline: auto;
   box-shadow: none;
 }
 .knowledge-library {
-  max-width: 1120px;
+  max-width: var(--content-width);
   padding: var(--space-10);
 }
 .library-heading {
