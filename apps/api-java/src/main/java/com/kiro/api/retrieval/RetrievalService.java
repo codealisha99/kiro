@@ -67,8 +67,8 @@ public class RetrievalService {
           AND dv."approvalStatus" = 'APPROVED'
         """ + aclPredicate() + """
         ORDER BY dc."embedding" <=> ?::vector
-        LIMIT """ + SEMANTIC_LIMIT;
-    return jdbc.query(sql, this::mapRow, literal, user.tenantId(), user.id(), user.roleUpper(),
+        LIMIT """ + " " + SEMANTIC_LIMIT;
+    return jdbc.query(sql, this::mapRow, literal, user.tenantId(), user.id(),
         user.id(), user.roleUpper(), literal);
   }
 
@@ -88,14 +88,14 @@ public class RetrievalService {
           AND to_tsvector('english', dc."content") @@ plainto_tsquery('english', ?)
         """ + aclPredicate() + """
         ORDER BY score DESC
-        LIMIT """ + KEYWORD_LIMIT;
+        LIMIT """ + " " + KEYWORD_LIMIT;
     return jdbc.query(sql, this::mapRow, query, user.tenantId(), query, user.id(),
-        user.roleUpper(), user.id(), user.roleUpper());
+        user.id(), user.roleUpper());
   }
 
   /**
    * Visibility rule (fail-closed): PUBLIC/INTERNAL for the tenant, CONFIDENTIAL/RESTRICTED
-   * only for owner or explicit USER/ROLE grant. Placeholders: userId, roleUpper, userId, roleUpper.
+   * only for owner or explicit USER/ROLE grant. Placeholders: ownerId, userId, roleUpper.
    */
   static String aclPredicate() {
     return """
