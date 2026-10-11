@@ -1,11 +1,13 @@
 package com.kiro.api.ai;
 
 import com.kiro.api.config.AppProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,6 +39,7 @@ public class AiServiceClient {
     try {
       var body = http.post()
           .uri(baseUrl + "/embed")
+          .contentType(MediaType.APPLICATION_JSON)
           .body(Map.of("texts", texts))
           .retrieve()
           .onStatus(s -> s.is5xxServerError() || s.is4xxClientError(),
@@ -65,6 +68,7 @@ public class AiServiceClient {
     try {
       var body = http.post()
           .uri(baseUrl + "/generate")
+          .contentType(MediaType.APPLICATION_JSON)
           .body(payload)
           .retrieve()
           .onStatus(s -> s.is5xxServerError() || s.is4xxClientError(),
@@ -74,7 +78,7 @@ public class AiServiceClient {
               })
           .body(GenerateResponse.class);
       if (body == null) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Empty AI response");
-      return new GenerateResult(body.text(), body.model(), body.model_version(), body.usage());
+      return new GenerateResult(body.text(), body.model(), body.modelVersion(), body.usage());
     } catch (ResponseStatusException e) {
       throw e;
     } catch (Exception e) {
@@ -93,5 +97,5 @@ public class AiServiceClient {
       List<List<Double>> embeddings, String model, int dimensions, Map<String, Object> usage) {}
 
   public record GenerateResponse(
-      String text, String model, String model_version, Map<String, Object> usage) {}
+      String text, String model, @JsonProperty("model_version") String modelVersion, Map<String, Object> usage) {}
 }

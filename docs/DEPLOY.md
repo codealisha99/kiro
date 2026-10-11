@@ -4,6 +4,12 @@ The production topology uses Vercel for `apps/web` and Railway for the Java API,
 Python AI service, PostgreSQL with pgvector, and Redis. GitHub repository:
 `codealisha99/kiro`, production branch: `main`.
 
+Live URLs:
+
+- Web: <https://kiro-orpin-iota.vercel.app>
+- API: <https://api-production-9ffb7.up.railway.app>
+- Railway: <https://railway.com/project/e5bdb207-e575-453f-aa9c-60958f41655b>
+
 ## Vercel frontend
 
 Project: `kiro` in the `codealisha99-9119` account. Configure:
@@ -21,6 +27,9 @@ Project: `kiro` in the `codealisha99-9119` account. Configure:
 Build both application services from the **repository root**. Build and health
 check settings are configured on their Railway service instances. The current
 Railway API has retired `railway.toml`; do not configure a legacy config path.
+The imported infrastructure is recorded in `.railway/railway.ts`. Run
+`railway config plan` from this linked checkout to review proposed changes.
+Service variables are unmanaged in this file and remain in Railway.
 
 | Service | Source | Config / volume |
 | --- | --- | --- |
