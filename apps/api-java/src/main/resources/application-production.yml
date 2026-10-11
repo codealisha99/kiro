@@ -1,0 +1,28 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      url: ${REDIS_URL}
+
+server:
+  port: ${PORT:3001}
+  forward-headers-strategy: framework
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:3600}
+  cors:
+    allowed-origins: ${CORS_ORIGINS}
+  ai-service-url: ${AI_SERVICE_URL}
+  storage-dir: ${STORAGE_DIR:/data/storage}
+  storage-driver: local
+  chunk-size: ${CHUNKER_CHUNK_SIZE:1000}
+  chunk-overlap: ${CHUNKER_OVERLAP:200}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

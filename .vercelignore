@@ -1,0 +1,8 @@
+.env
+.env.*
+.venv
+apps/api
+apps/api-java
+apps/ai
+**/target
+**/__pycache__

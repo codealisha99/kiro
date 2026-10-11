@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { WorkspaceIcon, type IconName } from "@/components/WorkspaceIcon";
 import {
   Alert,
   Badge,
   Button,
   Card,
+  Dialog,
   Field,
+  FileUpload,
+  StatefulButton,
   Input,
   Select,
   Textarea,
@@ -24,11 +28,13 @@ const colors = [
 ];
 
 export default function DesignSystemPage() {
+  const [file, setFile] = useState<File | null>(null);
   const [dark, setDark] = useState(false);
   const [tab, setTab] = useState("Evidence");
   const [saved, setSaved] = useState(false);
   const [query, setQuery] = useState("");
   const [asked, setAsked] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <div className="system" data-theme={dark ? "dark" : "light"}>
       <aside className="system-nav">
@@ -194,14 +200,38 @@ export default function DesignSystemPage() {
             <Card>
               <h3>Actions</h3>
               <p className="muted">One primary action per task.</p>
+              <div
+                className="system-component-row"
+                aria-label="Rounded outline icons"
+              >
+                {(
+                  [
+                    "message",
+                    "book",
+                    "search",
+                    "user",
+                    "settings",
+                    "shield",
+                    "upload",
+                  ] as IconName[]
+                ).map((name) => (
+                  <span key={name} title={name}>
+                    <WorkspaceIcon name={name} width="24" height="24" />
+                  </span>
+                ))}
+              </div>
               <div className="system-component-row">
-                <Button variant="primary" onClick={() => setSaved(true)}>
-                  Save record
-                </Button>
+                <StatefulButton
+                  variant="primary"
+                  success={saved}
+                  onClick={() => setSaved(true)}
+                >
+                  {saved ? "Saved" : "Save record"}
+                </StatefulButton>
                 <Button variant="secondary" onClick={() => setSaved(false)}>
                   Reset
                 </Button>
-                <Button disabled>Indexing…</Button>
+                <StatefulButton loading>Indexing…</StatefulButton>
               </div>
               <div className="system-component-row">
                 <Button size="small">Open source</Button>
@@ -218,6 +248,35 @@ export default function DesignSystemPage() {
                   Record saved. This is a component preview.
                 </Alert>
               )}
+              <div className="system-component-row">
+                <Button variant="secondary" onClick={() => setDialogOpen(true)}>
+                  Open dialog
+                </Button>
+              </div>
+              <Dialog
+                open={dialogOpen}
+                title="A focused task"
+                onClose={() => setDialogOpen(false)}
+              >
+                <div className="form">
+                  <p>
+                    Document uploads and source details open when needed,
+                    keeping the workspace clear.
+                  </p>
+                  <FileUpload file={file} onChange={setFile} />
+                  <Field label="Document title">
+                    {(field) => (
+                      <Input {...field} placeholder="Customer refund policy" />
+                    )}
+                  </Field>
+                  <Button
+                    variant="primary"
+                    onClick={() => setDialogOpen(false)}
+                  >
+                    Done
+                  </Button>
+                </div>
+              </Dialog>
             </Card>
             <Card>
               <h3>Classification & status</h3>
@@ -267,8 +326,13 @@ export default function DesignSystemPage() {
                     />
                   )}
                 </Field>
-                <Field label="Unavailable record" hint="This record is being indexed.">
-                  {(field) => <Input {...field} disabled defaultValue="Supplier policy" />}
+                <Field
+                  label="Unavailable record"
+                  hint="This record is being indexed."
+                >
+                  {(field) => (
+                    <Input {...field} disabled defaultValue="Supplier policy" />
+                  )}
                 </Field>
                 <Field label="Work email" error="Enter a valid work email.">
                   {(field) => (

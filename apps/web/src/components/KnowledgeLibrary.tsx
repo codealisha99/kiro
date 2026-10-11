@@ -1,0 +1,308 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import type { DocumentListItem, EmbedStatus, SourceDto } from "@kiro/shared";
+import {
+  Alert,
+  Button,
+  Dialog,
+  Field,
+  FileUpload,
+  StatefulButton,
+  Input,
+  Select,
+  Textarea,
+} from "@/components/ui";
+import { api } from "@/lib/api";
+import { WorkspaceIcon } from "./WorkspaceIcon";
+
+export default function KnowledgeLibrary({
+  documents,
+  sources,
+  embedStatus,
+  onOpen,
+  onRefresh,
+}: {
+  documents: DocumentListItem[];
+  sources: SourceDto[];
+  embedStatus: EmbedStatus | null;
+  onOpen: (id: string) => void;
+  onRefresh: () => Promise<void>;
+}) {
+  const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [mode, setMode] = useState<"file" | "text">("file");
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [classification, setClassification] = useState("internal");
+  const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const names = useMemo(
+    () => new Map(sources.map((source) => [source.id, source.name])),
+    [sources],
+  );
+  const filtered = documents.filter((doc) =>
+    `${doc.title} ${names.get(doc.sourceId) ?? ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (saving || (mode === "file" && !file)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result =
+        mode === "file" && file
+          ? await api.uploadDocument(file, {
+              title: title || undefined,
+              classification,
+            })
+          : await api.ingestDocument({ title, content, classification });
+      setNotice(`“${result.title}” added to your library.`);
+      setAdding(false);
+      setFile(null);
+      setTitle("");
+      setContent("");
+      setClassification("internal");
+      await onRefresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not add the document. Please try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function seed() {
+    setSeeding(true);
+    setError(null);
+    try {
+      const result = await api.seedDemo();
+      setNotice(`${result.documentCount} sample documents added.`);
+      await onRefresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load sample documents.",
+      );
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  return (
+    <section className="knowledge-library" aria-labelledby="library-title">
+      <div className="library-heading">
+        <div>
+          <h1 id="library-title">Your library</h1>
+          <p>The knowledge behind your answers.</p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setError(null);
+            setFile(null);
+            setAdding(true);
+          }}
+        >
+          <WorkspaceIcon name="plus" />
+          Add document
+        </Button>
+      </div>
+      {notice && (
+        <p className="library-notice" role="status">
+          <WorkspaceIcon name="check" />
+          {notice}
+        </p>
+      )}
+      {error && !adding && <Alert tone="danger">{error}</Alert>}
+      <div className="library-tools">
+        <div className="library-search">
+          <WorkspaceIcon name="search" />
+          <Input
+            aria-label="Search documents"
+            placeholder="Find a document…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+        <span className="library-count">
+          {documents.length} document{documents.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {embedStatus && embedStatus.totalChunks > 0 && !embedStatus.ready && (
+        <p className="library-status" role="status">
+          <span className="status-dot" />
+          Documents are saved. Search preparation is pending.
+        </p>
+      )}
+      <div className="document-list">
+        {filtered.map((doc) => (
+          <button
+            key={doc.id}
+            className="document-row"
+            onClick={() => onOpen(doc.id)}
+          >
+            <span className="document-icon">
+              <WorkspaceIcon name="file" />
+            </span>
+            <span className="document-info">
+              <strong>{doc.title}</strong>
+              <span>{names.get(doc.sourceId) ?? "Uploaded document"}</span>
+            </span>
+            <span className={`document-access ${doc.classification}`}>
+              <WorkspaceIcon name="lock" />
+              {doc.classification}
+            </span>
+            <WorkspaceIcon name="chevron" className="document-chevron" />
+          </button>
+        ))}
+        {filtered.length === 0 && (
+          <div className="library-empty">
+            <WorkspaceIcon name="book" width="32" height="32" />
+            <h2>
+              {documents.length
+                ? "No matching documents"
+                : "A place for what your team knows"}
+            </h2>
+            <p>
+              {documents.length
+                ? "Try a different title or source name."
+                : "Add a policy, a project brief, or a useful piece of context."}
+            </p>
+            {!documents.length && (
+              <Button
+                variant="secondary"
+                disabled={seeding}
+                onClick={() => void seed()}
+              >
+                {seeding ? "Adding samples…" : "Try with sample documents"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {documents.length > 0 && (
+        <p className="library-footnote">
+          <WorkspaceIcon name="lock" />
+          Only documents you have access to appear here.
+        </p>
+      )}
+      <Dialog
+        open={adding}
+        title="Add a document"
+        onClose={() => {
+          if (!saving) setAdding(false);
+        }}
+      >
+        <form
+          className="form document-form"
+          onSubmit={(event) => void submit(event)}
+        >
+          <div className="document-mode" aria-label="Document format">
+            <button
+              type="button"
+              disabled={saving}
+              aria-pressed={mode === "file"}
+              onClick={() => {
+                setMode("file");
+                setFile(null);
+                setError(null);
+              }}
+            >
+              <WorkspaceIcon name="upload" />
+              Upload file
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              aria-pressed={mode === "text"}
+              onClick={() => {
+                setMode("text");
+                setError(null);
+              }}
+            >
+              <WorkspaceIcon name="file" />
+              Paste text
+            </button>
+          </div>
+          {mode === "file" && (
+            <FileUpload
+              key={adding ? "open" : "closed"}
+              file={file}
+              onChange={setFile}
+              disabled={saving}
+            />
+          )}
+          <Field label={mode === "file" ? "Title (optional)" : "Title"}>
+            {(field) => (
+              <Input
+                {...field}
+                placeholder={file?.name ?? "e.g. Customer refund policy"}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required={mode === "text"}
+              />
+            )}
+          </Field>
+          {mode === "text" && (
+            <Field label="Document text">
+              {(field) => (
+                <Textarea
+                  {...field}
+                  placeholder="Paste the content you want your team to find…"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  required
+                  rows={6}
+                />
+              )}
+            </Field>
+          )}
+          <Field label="Who can access this?">
+            {(field) => (
+              <Select
+                {...field}
+                value={classification}
+                onChange={(event) => setClassification(event.target.value)}
+              >
+                <option value="internal">Everyone in your workspace</option>
+                <option value="public">Public</option>
+                <option value="confidential">
+                  Managers and administrators
+                </option>
+                <option value="restricted">Only you</option>
+              </Select>
+            )}
+          </Field>
+          {error && <Alert tone="danger">{error}</Alert>}
+          <div className="document-form-actions">
+            <Button
+              variant="secondary"
+              disabled={saving}
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </Button>
+            <StatefulButton
+              loading={saving}
+              variant="primary"
+              type="submit"
+              disabled={saving || (mode === "file" && !file)}
+            >
+              {saving ? "Adding document…" : "Add to library"}
+            </StatefulButton>
+          </div>
+        </form>
+      </Dialog>
+    </section>
+  );
+}

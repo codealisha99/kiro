@@ -1,9 +1,9 @@
 # ---- build stage ----
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
-COPY pom.xml .
+COPY apps/api-java/pom.xml .
 RUN mvn -q dependency:go-offline -DskipTests
-COPY src ./src
+COPY apps/api-java/src ./src
 RUN mvn -q package -DskipTests
 
 # ---- runtime stage ----

@@ -54,7 +54,7 @@ Base rhythm: 4px. Spacing steps: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64px.
 
 Controls use an 8px radius; cards use 12px; auth uses 20px; metadata can use pills. Standard buttons and fields are at least 42px tall; compact utility buttons are at least 32px. Use 16–24px within panels and 32–64px between major sections.
 
-The desktop desk has navigation, a flexible reading column, and a source ledger. At 1100px the ledger becomes a drawer; at 760px navigation becomes a drawer. Documentation and admin use a maximum width of 1120px. Grid children must use `minmax(0, 1fr)` or `min-width: 0` where content could overflow. Long data tables scroll within their panel.
+The desktop workspace has a quiet 232px navigation rail and a single reading canvas. The question screen centers a 680px composer; the Library is a separate view. Upload forms and source documents open in native dialogs. Below 760px, navigation becomes a drawer. Documentation and admin use a maximum width of 1120px. Grid children must use `minmax(0, 1fr)` or `min-width: 0` where content could overflow. Long data tables scroll within their panel.
 
 ## Components and interaction
 
@@ -74,7 +74,7 @@ Example:
 <Button variant="primary" type="submit">Open the desk</Button>
 ```
 
-Focus is visible with a 2px teal outline; the composer uses `:focus-within`. Motion is limited to 120–180ms color feedback. Respect `prefers-reduced-motion`. Keep interactive elements native and label icon-only controls. Do not use placeholders as the only field label. Put action errors next to the action and give loading states readable text.
+Focus is visible with a 2px teal outline; the composer uses `:focus-within`. Motion uses 120–180ms color feedback and subtle user-triggered surface transitions. Respect `prefers-reduced-motion`. Keep interactive elements native and label icon-only controls. Do not use placeholders as the only field label. Put action errors next to the action and give loading states readable text.
 
 ## Decisions
 
@@ -91,4 +91,23 @@ The palette refinements, spacing scale, component API, and dark palette are the 
 
 Shared control styles own fields, buttons, badges, alerts, and cards; workspace, evidence, and authentication composition stays in `globals.css`. Fields retain the same size inside and outside forms. Completed answers and indexing use success and warning tones; source markings retain terracotta. The question composer uses the primary teal action.
 
-On smaller screens, the ledger remains open when switching between Library and Evidence. Navigation and ledger drawers include visible close controls, a dismissible backdrop, Escape dismissal, contained keyboard focus, and focus restoration. Reading content and long document titles wrap within their panels. The cover photograph uses dedicated foreground tokens so its text stays readable in either preview theme.
+On smaller screens, navigation includes a visible close control, a dismissible backdrop, Escape dismissal, contained keyboard focus, and focus restoration. Native dialogs provide the same keyboard behavior for uploads and source reading. Reading content and long document titles wrap within their panels. The cover photograph uses dedicated foreground tokens so its text stays readable in either preview theme.
+
+## Workspace simplification — 2026-10-08
+
+The user requested a simpler, more premium workspace. Keep the existing palette and typography, and create hierarchy through fewer visible controls and generous space:
+
+- Ask Kiro is the default screen, with one composer and three optional question starters.
+- Library is a separate view with search and quiet document rows. Show restricted access labels when relevant; avoid repeated status badges.
+- Add document opens a focused dialog with separate file and text modes. Source details also open on demand.
+- Search preparation belongs in Library, without chunk counts or technical banners in the question screen.
+- Conversation questions use editorial headings; citations are compact source links. Errors offer a clear next action.
+- The shared `Dialog` primitive uses native modal semantics, Escape dismissal, a visible close button, and focus restoration. Its interactive reference is under Components in `/design-system`.
+
+## Aceternity refinements
+
+`FileUpload` provides a keyboard-accessible dropzone with a selected-file summary, removal, and 10 MB validation. `StatefulButton` exposes controlled loading and success feedback; success must reflect a completed operation. Dialogs use restrained 180ms enter/exit motion while retaining native focus behavior. All three respect reduced motion and semantic theme tokens. Interactive previews are in `/design-system`; upstream sources are recorded in `docs/ui-attributions.md`.
+
+## Icon and account refinement — 2026-10-08
+
+Use Hugeicons Free Stroke Rounded through `WorkspaceIcon`: 18–20px for controls, 1.6px stroke, currentColor. Icons accompany clear labels; icon-only controls require accessible names. Keep the custom Kiro mark. The sidebar account entry opens a focused profile dialog with actual identity and role data, an admin overview link when permitted, and sign out. No placeholder settings or unsupported editing controls.

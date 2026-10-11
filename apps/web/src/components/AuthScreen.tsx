@@ -52,8 +52,8 @@ export default function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
           <div className="brand-mark">Internal knowledge</div>
           <h1>Kiro</h1>
           <p>
-            Ask what the company knows. Every answer comes with a paper trail
-            you are allowed to see.
+            Your team’s knowledge, within reach. Clear answers, with the sources
+            to back them up.
           </p>
         </div>
 
@@ -61,7 +61,7 @@ export default function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
           <div className="brand-mark">
             {mode === "login" ? "Sign in" : "New workspace"}
           </div>
-          <h2>{mode === "login" ? "Open the desk" : "Create a workspace"}</h2>
+          <h2>{mode === "login" ? "Welcome back" : "Create a workspace"}</h2>
 
           {error && <Alert tone="danger">{error}</Alert>}
 
@@ -137,7 +137,7 @@ export default function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
               {busy
                 ? "Please wait…"
                 : mode === "login"
-                  ? "Open the desk"
+                  ? "Sign in"
                   : "Create a workspace"}
             </Button>
           </form>

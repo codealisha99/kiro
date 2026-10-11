@@ -17,3 +17,4 @@ __pycache__/
 target/
 *.jar
 *.class
+.vercel

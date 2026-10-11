@@ -1,4 +1,77 @@
-# Deploy Kiro to Production
+# Deploy Kiro with GitHub, Vercel, and Railway
+
+The production topology uses Vercel for `apps/web` and Railway for the Java API,
+Python AI service, PostgreSQL with pgvector, and Redis. GitHub repository:
+`codealisha99/kiro`, production branch: `main`.
+
+## Vercel frontend
+
+Project: `kiro` in the `codealisha99-9119` account. Configure:
+
+- Root directory: `apps/web`, framework: Next.js, Node.js: 22.x.
+- Install command: `pnpm install --frozen-lockfile`.
+- Build command: `pnpm --filter @kiro/web build`.
+- Include files outside the root directory for `packages/shared`.
+- Set `NEXT_PUBLIC_API_URL` to the Railway API HTTPS domain in Production
+  **before building**. Rebuild whenever this value changes.
+- Connect the GitHub repository and use `main` as the production branch.
+
+## Railway services
+
+Build both application services from the **repository root**. Build and health
+check settings are configured on their Railway service instances. The current
+Railway API has retired `railway.toml`; do not configure a legacy config path.
+
+| Service | Source | Config / volume |
+| --- | --- | --- |
+| API | GitHub `main`, Dockerfile `apps/api-java/Dockerfile` | `/actuator/health`, 180s; volume at `/data` |
+| AI | GitHub `main`, Dockerfile `apps/ai/Dockerfile` | `/admin/health`, 60s |
+| PostgreSQL | Railway PostgreSQL 18 template (includes pgvector) | Persistent database volume |
+| Redis | Railway Redis template | Persistent Redis volume |
+
+Set these variables on the API service:
+
+```text
+SPRING_PROFILES_ACTIVE=production
+PORT=3001
+DATABASE_URL=<PostgreSQL private connection URL>
+REDIS_URL=<Redis private connection URL>
+JWT_SECRET=<random secret of at least 32 bytes>
+CORS_ORIGINS=<Vercel production HTTPS origin>
+AI_SERVICE_URL=http://<AI private domain>:8000
+STORAGE_DIR=/data/storage
+```
+
+Use Railway variable references for connection URLs so database credentials stay
+in Railway. Flyway applies migrations during API startup and enables `vector`;
+the PostgreSQL image must include the pgvector extension. The API readiness probe
+is `/actuator/health`; the AI liveness probe is `/admin/health`.
+
+Expose an HTTPS Railway domain for the API on port 3001. Keep PostgreSQL, Redis,
+and AI on the private network. The AI service listens on port 8000. Configure
+`AI_LLM_API_KEY` on AI to enable semantic retrieval and generated answers; without
+it, keyword retrieval and extractive answers remain available. Default embedding
+dimensions are 1536 and must match the database schema.
+
+## Verify a release
+
+1. Check API `/actuator/health` and `/health`.
+2. Open the Vercel production URL and register a workspace.
+3. Load the Northwind demo, ask about the refund policy, and inspect citations.
+4. Upload a document, open it, and confirm its content is available.
+5. Log out and log in again. Check that a second workspace cannot see the first.
+6. Confirm GitHub CI and both platform deployments pass for the release commit.
+
+The API Dockerfile uses the repository root as build context, matching GitHub CI
+and Docker Compose. Secrets and platform link metadata are ignored by Git.
+
+Platform references: [Railway config as code](https://docs.railway.com/config-as-code/reference),
+[Railway Compose migration](https://docs.railway.com/guides/docker-compose), and
+[Vercel monorepos](https://vercel.com/docs/monorepos).
+
+---
+
+# Legacy VPS deployment notes
 
 Step-by-step guide to put Kiro live on the internet. Kiro is a Docker multi-service app (web + API + AI + Postgres + Redis). For MVP, deploy **without Kubernetes** on a single VPS using the existing `docker-compose.yml`.
 
