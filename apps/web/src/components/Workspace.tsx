@@ -52,7 +52,11 @@ const PROMPTS = [
   },
 ];
 
-export default function Workspace() {
+export default function Workspace({
+  initialAuthMode = "login",
+}: {
+  initialAuthMode?: "login" | "register";
+}) {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<UserDto | null>(null);
@@ -338,7 +342,13 @@ export default function Workspace() {
   }
 
   if (!ready) return null;
-  if (!authed) return <AuthScreen onAuthed={() => setAuthed(true)} />;
+  if (!authed)
+    return (
+      <AuthScreen
+        initialMode={initialAuthMode}
+        onAuthed={() => setAuthed(true)}
+      />
+    );
   const empty = messages.length === 0;
   const currentTitle = conversations.find(
     (conversation) => conversation.id === activeConversationId,

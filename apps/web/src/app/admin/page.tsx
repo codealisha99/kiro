@@ -61,7 +61,7 @@ export default function AdminPage() {
   return (
     <main className="admin-page">
       <header className="admin-header">
-        <Link href="/">← Back to the desk</Link>
+        <Link href="/app">← Back to the desk</Link>
         <Badge>Admin</Badge>
       </header>
       <div className="admin-intro">
@@ -73,7 +73,7 @@ export default function AdminPage() {
       </div>
       {err ? (
         <Alert tone="danger">
-          {err} <Link href="/">Go to sign in</Link>
+          {err} <Link href="/app">Go to sign in</Link>
         </Alert>
       ) : !data ? (
         <Alert>Loading admin metrics…</Alert>

@@ -56,7 +56,7 @@ export default function DesignSystemPage() {
         </nav>
         <div className="system-nav-footer">
           <p>Answers with a paper trail.</p>
-          <Link href="/">Open the desk ↗</Link>
+          <Link href="/app">Open the desk ↗</Link>
         </div>
       </aside>
 
@@ -507,7 +507,7 @@ export default function DesignSystemPage() {
                     />
                   )}
                 </Field>
-                <Link className="btn signal block" href="/">
+                <Link className="btn signal block" href="/app">
                   Go to sign in ↗
                 </Link>
               </div>

@@ -111,3 +111,7 @@ The user requested a simpler, more premium workspace. Keep the existing palette 
 ## Icon and account refinement — 2026-10-08
 
 Use Hugeicons Free Stroke Rounded through `WorkspaceIcon`: 18–20px for controls, 1.6px stroke, currentColor. Icons accompany clear labels; icon-only controls require accessible names. Keep the custom Kiro mark. The sidebar account entry opens a focused profile dialog with actual identity and role data, an admin overview link when permitted, and sign out. No placeholder settings or unsupported editing controls.
+
+## Marketing entry — 2026-10-11
+
+The public `/` page introduces the knowledge desk through an interactive, explicitly illustrative answer and source passage. It extends the existing editorial type and semantic palette, with a document stack, a three-step workflow, access and evidence explanations, and native expandable questions. `/app` hosts the workspace; `/app?mode=register` opens registration. Keep marketing claims aligned with available features and preserve direct access to the desk.
