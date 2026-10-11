@@ -54,7 +54,8 @@ CR=$(api POST /documents "$TA" '{"title":"Secret Plan","content":"Project Midnig
 SID=$(body_of "$CR" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 QB=$(api POST /brain/query "$TB" '{"query":"What is Project Midnight budget?"}')
 QB_BODY=$(body_of "$QB")
-if [ "$(code_of "$QB")" = "200" ] && ! grep -qi "midnight\|9M" <<<"$QB_BODY"; then
+# The response echoes the caller's question; inspect only returned knowledge.
+if [ "$(code_of "$QB")" = "200" ] && python3 -c 'import json,sys; d=json.load(sys.stdin); answer=d.get("answer", "").lower(); sys.exit(0 if d.get("status") == "unknown" and d.get("sources") == [] and "midnight" not in answer and "9m" not in answer else 1)' <<<"$QB_BODY"; then
   ok "tenant B query leaks nothing"
 else bad "tenant B query leaks nothing"; fi
 
