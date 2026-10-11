@@ -4,8 +4,10 @@ import "./globals.css";
 import "../styles/primitives.css";
 
 export const metadata: Metadata = {
-  title: "Kiro",
-  description: "Ask what the company knows. See the source.",
+  title: { default: "Kiro — Company knowledge, with the source", template: "%s" },
+  description: "A permission-aware company knowledge desk. Ask questions of your documents and inspect the evidence behind each answer.",
+  applicationName: "Kiro",
+  creator: "Alisha Karma",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

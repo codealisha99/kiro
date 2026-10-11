@@ -10,7 +10,7 @@ PDFBox/POI parsers, JJWT, Micrometer + Actuator.
 ## Run locally (needs Postgres/pgvector :5433 + Redis :6379)
 
 ```bash
-# infra (NestJS compose services)
+# Local infrastructure
 docker compose up -d postgres redis
 
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
@@ -20,11 +20,12 @@ export JWT_SECRET="local-dev-secret-that-is-at-least-32-chars-long"
 export AI_SERVICE_URL="http://localhost:8000"
 export CORS_ORIGINS="http://localhost:3000"
 
+cd apps/api-java
 mvn spring-boot:run            # serves :3001 (SPRING_PROFILES_ACTIVE=local default)
 ```
 
 Point the frontend at it: `NEXT_PUBLIC_API_URL=http://localhost:3001 pnpm --filter @kiro/web dev`.
-Run with the Java backend in compose: `docker compose --profile java up --build postgres redis ai api-java web`.
+Run with the Java backend in compose: `docker compose up --build postgres redis ai api-java web`.
 
 ## Environment
 

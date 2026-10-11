@@ -1,0 +1,289 @@
+[
+  {
+    "route": "/",
+    "state": "home",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [
+        "aria-prohibited-attr"
+      ],
+      "passes": 24
+    }
+  },
+  {
+    "route": "/app",
+    "state": "login",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [
+        "color-contrast"
+      ],
+      "passes": 24
+    }
+  },
+  {
+    "route": "/app?mode=register",
+    "state": "register",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [
+        "color-contrast"
+      ],
+      "passes": 24
+    }
+  },
+  {
+    "route": "/admin",
+    "state": "admin",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [],
+      "passes": 16
+    }
+  },
+  {
+    "route": "/design-system",
+    "state": "design-dark",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [
+        "aria-prohibited-attr"
+      ],
+      "passes": 24
+    }
+  },
+  {
+    "route": "/design-system",
+    "state": "design-light",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [
+        "aria-prohibited-attr"
+      ],
+      "passes": 24
+    }
+  },
+  {
+    "route": "/missing-page",
+    "state": "not-found",
+    "layouts": [
+      {
+        "width": 320,
+        "scrollWidth": 320,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 768,
+        "scrollWidth": 768,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      },
+      {
+        "width": 1600,
+        "scrollWidth": 1600,
+        "unlabelledInputs": 0,
+        "brokenAnchors": []
+      }
+    ],
+    "accessibility": {
+      "violations": [],
+      "incomplete": [],
+      "passes": 17
+    }
+  }
+]

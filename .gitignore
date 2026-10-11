@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+.next-dev/
 out/
 coverage/
 *.log
@@ -18,3 +19,4 @@ target/
 *.jar
 *.class
 .vercel
+.gstack/

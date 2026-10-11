@@ -1,0 +1,9 @@
+{
+  "/": 200,
+  "/app": 200,
+  "/app?mode=register": 200,
+  "/admin": 200,
+  "/design-system": 200,
+  "/icon.svg": 200,
+  "/missing-page": 404
+}

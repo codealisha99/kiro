@@ -19,7 +19,13 @@ import {
   StatefulButton,
   Textarea,
 } from "@/components/ui";
-import { api, ApiError, clearToken, getToken } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  clearToken,
+  getToken,
+  SESSION_EXPIRED_EVENT,
+} from "@/lib/api";
 import { AccountProfile } from "./AccountProfile";
 import AuthScreen from "./AuthScreen";
 import EvidencePanel from "./EvidencePanel";
@@ -59,7 +65,8 @@ export default function Workspace({
   initialAuthMode?: "login" | "register";
 }) {
   const [loaded, setLoaded] = useState(false);
-  const [libraryStartAdding, setLibraryStartAdding] = useState(false);
+  const [libraryAddRequest, setLibraryAddRequest] = useState(0);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [user, setUser] = useState<UserDto | null>(null);
@@ -90,7 +97,8 @@ export default function Workspace({
   const documentRequestRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!getToken()) return;
+    const session = getToken();
+    if (!session) return;
     try {
       const [me, srcs, docs, convs, embeds] = await Promise.all([
         api.me(),
@@ -99,6 +107,7 @@ export default function Workspace({
         api.conversations(),
         api.embedStatus().catch(() => null),
       ]);
+      if (getToken() !== session) return;
       setUser(me);
       setSources(srcs);
       setDocuments(docs);
@@ -106,6 +115,7 @@ export default function Workspace({
       setEmbedStatus(embeds);
       setLoaded(true);
     } catch (err) {
+      if (getToken() !== session) return;
       if (err instanceof ApiError && err.status === 401) {
         clearToken();
         setAuthed(false);
@@ -117,6 +127,31 @@ export default function Workspace({
   useEffect(() => {
     setAuthed(!!getToken());
     setReady(true);
+  }, []);
+  useEffect(() => {
+    const expire = () => {
+      setAuthed(false);
+      setSessionExpired(true);
+      setLoaded(false);
+      setUser(null);
+      setDocuments([]);
+      setSources([]);
+      setConversations([]);
+      setMessages([]);
+      setActiveConversationId(null);
+      setEmbedStatus(null);
+      setDocumentOpen(false);
+      setOpenDoc(null);
+      setActiveCite(null);
+      documentRequestRef.current += 1;
+      setRailOpen(false);
+      setFeedback({});
+      setInput("");
+      setNotice(null);
+      setView("ask");
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
   }, []);
   useEffect(() => {
     if (authed) void load();
@@ -210,6 +245,7 @@ export default function Workspace({
     async (text?: string) => {
       const question = (text ?? input).trim();
       if (!question || busy) return;
+      const session = getToken();
       setView("ask");
       setNotice(null);
       setMessages((prev) => [
@@ -223,6 +259,7 @@ export default function Workspace({
           query: question,
           conversationId: activeConversationId ?? undefined,
         });
+        if (getToken() !== session) return;
         setActiveConversationId(res.conversationId);
         setMessages((prev) => [
           ...prev,
@@ -236,6 +273,7 @@ export default function Workspace({
         ]);
         void load();
       } catch (err) {
+        if (getToken() !== session) return;
         const content =
           err instanceof ApiError && err.status === 503
             ? "Answers are temporarily unavailable. You can still browse your documents in the library."
@@ -262,8 +300,10 @@ export default function Workspace({
     if (busy) return;
     setBusy(true);
     setNotice(null);
+    const session = getToken();
     try {
       const detail = await api.conversation(id);
+      if (getToken() !== session) return;
       setActiveConversationId(detail.id);
       setMessages(
         detail.messages.flatMap((item): ChatMessage[] => [
@@ -288,6 +328,7 @@ export default function Workspace({
       setView("ask");
       setRailOpen(false);
     } catch {
+      if (getToken() !== session) return;
       setNotice("This conversation could not be opened. Please try again.");
     } finally {
       setBusy(false);
@@ -305,12 +346,12 @@ export default function Workspace({
     requestAnimationFrame(() => composerRef.current?.focus());
   }
   function addKnowledge() {
-    setLibraryStartAdding(true);
+    setLibraryAddRequest((request) => request + 1);
     setView("library");
     setRailOpen(false);
   }
   function showLibrary() {
-    setLibraryStartAdding(false);
+    setLibraryAddRequest(0);
     setView("library");
     setRailOpen(false);
   }
@@ -322,6 +363,8 @@ export default function Workspace({
     }
     clearToken();
     setAuthed(false);
+    setSessionExpired(false);
+    setLibraryAddRequest(0);
     setUser(null);
     setLoaded(false);
     setMessages([]);
@@ -357,7 +400,11 @@ export default function Workspace({
     return (
       <AuthScreen
         initialMode={initialAuthMode}
-        onAuthed={() => setAuthed(true)}
+        sessionExpired={sessionExpired}
+        onAuthed={() => {
+          setSessionExpired(false);
+          setAuthed(true);
+        }}
       />
     );
   const empty = messages.length === 0;
@@ -373,6 +420,9 @@ export default function Workspace({
 
   return (
     <div className={`workspace ${railOpen ? "navigation-open" : ""}`}>
+      <a className="skip-link" href="#workspace-content">
+        Skip to knowledge desk
+      </a>
       {railOpen && (
         <button
           className="workspace-backdrop"
@@ -470,7 +520,12 @@ export default function Workspace({
         {user && <AccountProfile user={user} onLogout={logout} />}
       </aside>
 
-      <main className="workspace-main" inert={railOpen || undefined}>
+      <main
+        id="workspace-content"
+        className="workspace-main"
+        inert={railOpen || undefined}
+        tabIndex={-1}
+      >
         <header className="workspace-header">
           <div>
             <Button
@@ -534,7 +589,7 @@ export default function Workspace({
             embedStatus={embedStatus}
             onOpen={(id) => void openDocument(id)}
             onRefresh={load}
-            initialAdding={libraryStartAdding}
+            addRequest={libraryAddRequest}
           />
         ) : (
           <div

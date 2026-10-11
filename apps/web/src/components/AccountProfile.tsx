@@ -56,7 +56,7 @@ export function AccountProfile({
           <span className="account-avatar">{initials}</span>
           <span className="account-summary">
             <strong>{name}</strong>
-            <span>Personal account</span>
+            <span>{role}</span>
           </span>
           <WorkspaceIcon name="settings" />
         </button>

@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "Marketing example changes the question, answer and source",
+    "Source disclosure closes",
+    "FAQ opens with native disclosure",
+    "Password visibility toggles",
+    "Unavailable backend produces a readable sign-in error; short login passwords reach the API",
+    "Switching auth mode clears password and stale error",
+    "Native dialog traps initial focus, closes on Escape and restores focus",
+    "Design reference toggles dark theme",
+    "404 recovery opens the desk sign-in",
+    "Registration requires company/email/password, rejects an empty form, and enforces eight password characters"
+  ],
+  "limits": "No live backend; authentication success, signed-in workflows, persistence and authorization require local services."
+}

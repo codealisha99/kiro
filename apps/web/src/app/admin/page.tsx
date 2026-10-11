@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getToken } from "@/lib/api";
+import { api, ApiError, getToken, SESSION_EXPIRED_EVENT } from "@/lib/api";
 import { Alert, Badge, Button, Card } from "@/components/ui";
 import "./admin.css";
 
@@ -14,24 +14,56 @@ export default function AdminPage() {
     ReturnType<typeof api.metrics>
   > | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [metricsError, setMetricsError] = useState(false);
   const [running, setRunning] = useState<"retrieval" | "rag" | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [evalError, setEvalError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
+    setErr(null);
+    setDenied(false);
+    setData(null);
+    setMetrics(null);
+    setMetricsError(false);
     if (!getToken()) {
-      setErr("Sign in as an admin to view metrics.");
+      setDenied(true);
+      setErr("Sign in with an administrator account to view workspace health.");
       return;
     }
-    api
-      .adminMetrics()
-      .then(setData)
-      .catch((e) => setErr(String(e)));
-    api
-      .metrics()
-      .then(setMetrics)
-      .catch(() => undefined);
+    try {
+      // Confirm admin access before loading secondary service metrics.
+      setData(await api.adminMetrics());
+      try {
+        setMetrics(await api.metrics());
+      } catch {
+        setMetricsError(true);
+      }
+    } catch (error) {
+      const accessDenied =
+        error instanceof ApiError && [401, 403].includes(error.status);
+      setDenied(accessDenied);
+      setErr(
+        accessDenied
+          ? error.status === 403
+            ? "This overview is available to workspace administrators."
+            : "Your session has expired. Sign in again to continue."
+          : "Workspace health could not be loaded. Check your connection and try again.",
+      );
+    }
   }, []);
+
+  useEffect(() => {
+    const expire = () => {
+      setData(null);
+      setMetrics(null);
+      setDenied(true);
+      setErr("Your session has expired. Sign in again to continue.");
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    void refresh();
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
+  }, [refresh]);
 
   async function evaluate(kind: "retrieval" | "rag") {
     setRunning(kind);
@@ -62,7 +94,19 @@ export default function AdminPage() {
     <main className="admin-page">
       <header className="admin-header">
         <Link href="/app">← Back to the desk</Link>
-        <Badge>Admin</Badge>
+        <div className="admin-header-actions">
+          {data && (
+            <Button
+              variant="secondary"
+              size="small"
+              disabled={running !== null}
+              onClick={() => void refresh()}
+            >
+              Refresh overview
+            </Button>
+          )}
+          <Badge>Administrator</Badge>
+        </div>
       </header>
       <div className="admin-intro">
         <p className="brand-mark">Kiro / Workspace health</p>
@@ -72,9 +116,28 @@ export default function AdminPage() {
         </p>
       </div>
       {err ? (
-        <Alert tone="danger">
-          {err} <Link href="/app">Go to sign in</Link>
-        </Alert>
+        <Card className="admin-access-state">
+          <p className="brand-mark">
+            {denied ? "Workspace access" : "Connection interrupted"}
+          </p>
+          <h2>
+            {denied
+              ? "The right access opens this view."
+              : "Let’s reconnect to your desk."}
+          </h2>
+          <Alert tone={denied ? "info" : "danger"}>{err}</Alert>
+          <div className="actions">
+            {denied ? (
+              <Link className="btn signal" href="/app">
+                Return to the desk
+              </Link>
+            ) : (
+              <Button variant="primary" onClick={() => void refresh()}>
+                Try again
+              </Button>
+            )}
+          </div>
+        </Card>
       ) : !data ? (
         <Alert>Loading admin metrics…</Alert>
       ) : (
@@ -97,12 +160,30 @@ export default function AdminPage() {
               <strong>{data.recentErrors.length.toLocaleString()}</strong>
             </Card>
           </div>
+          {data.recentErrors.length === 0 && (
+            <div className="admin-health-note" role="status">
+              <Badge tone="success">No recent failures</Badge>
+              <p>
+                No failures were recorded in the recent activity returned by
+                your workspace.
+              </p>
+            </div>
+          )}
+          {metricsError && (
+            <Alert tone="warning">
+              Service performance is temporarily unavailable. Refresh the
+              overview to try again.
+            </Alert>
+          )}
           {data.recentErrors.length > 0 && (
             <Card className="admin-section">
               <h2>Recent failures</h2>
-              <pre className="admin-errors">
-                {JSON.stringify(data.recentErrors, null, 2)}
-              </pre>
+              <details>
+                <summary>Inspect recorded failures</summary>
+                <pre className="admin-errors">
+                  {JSON.stringify(data.recentErrors, null, 2)}
+                </pre>
+              </details>
             </Card>
           )}
           {metrics && (

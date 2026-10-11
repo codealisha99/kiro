@@ -286,7 +286,11 @@ export default function Page() {
         </Link>
         <p>Company knowledge. With the source.</p>
         <Link href="/app">Open the desk</Link>
-        <span>© {new Date().getFullYear()} Kiro</span>
+        <div className="landing-credits">
+          <span>Maintained by <a href="https://alishakarma.com">Alisha Karma</a></span>
+          <a href="https://github.com/codealisha99/kiro">GitHub</a>
+          <a href="mailto:lishykarma99@gmail.com">Contact</a>
+        </div>
       </footer>
     </div>
   );

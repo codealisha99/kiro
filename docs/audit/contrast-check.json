@@ -1,0 +1,142 @@
+[
+  {
+    "theme": "light",
+    "foreground": "text",
+    "background": "panel",
+    "ratio": 14.29,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "muted",
+    "background": "surface",
+    "ratio": 5.36,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "accent",
+    "background": "panel",
+    "ratio": 7.42,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "marker",
+    "background": "panel",
+    "ratio": 5.68,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "success",
+    "background": "success-soft",
+    "ratio": 5.9,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "warning",
+    "background": "warning-soft",
+    "ratio": 5.9,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "danger",
+    "background": "danger-soft",
+    "ratio": 5.91,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "on-accent",
+    "background": "accent",
+    "ratio": 7.71,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "on-danger",
+    "background": "danger",
+    "ratio": 7.06,
+    "AA": true
+  },
+  {
+    "theme": "light",
+    "foreground": "on-marker",
+    "background": "marker",
+    "ratio": 5.91,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "text",
+    "background": "panel",
+    "ratio": 11.7,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "muted",
+    "background": "surface",
+    "ratio": 7.92,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "accent",
+    "background": "panel",
+    "ratio": 7.31,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "marker",
+    "background": "panel",
+    "ratio": 6.33,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "success",
+    "background": "success-soft",
+    "ratio": 6.89,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "warning",
+    "background": "warning-soft",
+    "ratio": 6.97,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "danger",
+    "background": "danger-soft",
+    "ratio": 6.47,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "on-accent",
+    "background": "accent",
+    "ratio": 8.22,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "on-danger",
+    "background": "danger",
+    "ratio": 8.49,
+    "AA": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "on-marker",
+    "background": "marker",
+    "ratio": 7.99,
+    "AA": true
+  }
+]

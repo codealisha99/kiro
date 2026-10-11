@@ -1,0 +1,32 @@
+{
+  "scope": "pnpm audit --prod; excludes Maven and Python dependencies",
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies": 285,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 285
+  },
+  "advisories": [
+    {
+      "module": "@nestjs/core",
+      "severity": "moderate",
+      "title": "@nestjs/core Improperly Neutralizes Special Elements in Output Used by a Downstream Component ('Injection')",
+      "patchedVersions": ">=11.1.18",
+      "findings": [
+        {
+          "version": "10.4.22",
+          "paths": [
+            "apps__api>@nestjs/core"
+          ]
+        }
+      ]
+    }
+  ]
+}
