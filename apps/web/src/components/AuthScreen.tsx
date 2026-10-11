@@ -5,8 +5,14 @@ import { Alert, Button, Field, Input } from "@/components/ui";
 import { FormEvent, useState } from "react";
 import { api, setToken } from "@/lib/api";
 
-export default function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+export default function AuthScreen({
+  onAuthed,
+  initialMode = "login",
+}: {
+  onAuthed: () => void;
+  initialMode?: "login" | "register";
+}) {
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
