@@ -119,3 +119,7 @@ The public `/` page introduces the knowledge desk through an interactive, explic
 ## Knowledge desk refinement — 2026-10-11
 
 The desk uses a framed reading canvas and a quiet sidebar. A new workspace starts with document setup; a populated workspace offers a left-aligned editorial welcome, one question composer, three explicit question starters, and recent documents. The library supports title/source search, access filters, and sorting by update date or title. Citations open a reader with the exact excerpt first and an expandable full document; highlight the entire matching passage, allowing for different line breaks. Keep drawer focus handling, native dialogs, and all access checks intact.
+
+## Sign-in composition — 2026-10-11
+
+Sign-in and registration use a split composition: an editorial brand panel with a contained cover photograph, and a dedicated form area. On mobile, the brand reduces to a compact header so the form stays primary. Composition lives in `components/auth-screen.css`; fields and buttons continue to use shared primitives. Password visibility is an explicit native control, switching modes clears stale errors and the password, and both sections provide a route back to the marketing page.
