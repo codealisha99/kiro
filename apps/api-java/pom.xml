@@ -15,7 +15,18 @@
   <artifactId>kiro-api</artifactId>
   <version>0.1.0</version>
   <name>kiro-api</name>
-  <description>Kiro / Company Brain backend — Spring Boot port of the NestJS API</description>
+  <description>Kiro company knowledge desk — Spring Boot API</description>
+
+  <url>https://github.com/codealisha99/kiro</url>
+  <developers>
+    <developer>
+      <id>codealisha99</id>
+      <name>Alisha Karma</name>
+      <email>lishykarma99@gmail.com</email>
+      <url>https://alishakarma.com</url>
+      <roles><role>maintainer</role></roles>
+    </developer>
+  </developers>
 
   <properties>
     <java.version>21</java.version>

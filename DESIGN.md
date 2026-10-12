@@ -133,3 +133,9 @@ Preserve the established editorial direction. Public navigation includes legitim
 Document classifications are workspace scoped. Public does not mean publicly accessible on the internet; restricted documents use owner or explicit access grants. Upload guidance explains this without altering API classification values.
 
 The original cover photograph remains unchanged; its source and rights have not been established by this audit. Verify them before publishing.
+
+## Brand assets — 2026-10-12
+
+Keep the established custom K-shaped mark and the Kiro product name. The browser icon now uses the exact proportions of `KiroMark`, rather than a separate interpretation. Reusable SVG assets live in `apps/web/public/brand`: a transparent mark and a paper-backed wordmark for repository documentation. The wordmark uses a Georgia fallback for portability; application typography continues to use IBM Plex Serif. The live reference shows the mark and wordmark in both preview themes.
+
+Use teal or the current foreground color for the mark. Preserve its aspect ratio, leave at least one stroke-width of clear space, and pair decorative marks with visible product text. Creator attribution belongs in maintenance information and the public footer. See `docs/OWNERSHIP.md` for identity, provenance, and asset limitations.

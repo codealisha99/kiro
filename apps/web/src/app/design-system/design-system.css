@@ -407,3 +407,18 @@
     flex-direction: column;
   }
 }
+
+.system-brand-reference {
+  display: grid;
+  gap: var(--space-5);
+}
+.system-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-accent);
+  font-family: var(--font-editorial);
+  font-size: var(--text-2xl);
+}
+.system-brand-reference p { color: var(--color-muted); }
+.system-brand-reference a { color: var(--color-accent); text-underline-offset: 3px; }

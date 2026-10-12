@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: "A permission-aware company knowledge desk. Ask questions of your documents and inspect the evidence behind each answer.",
   applicationName: "Kiro",
   creator: "Alisha Karma",
+  authors: [{ name: "Alisha Karma", url: "https://github.com/codealisha99" }],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

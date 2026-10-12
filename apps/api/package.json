@@ -55,5 +55,15 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
+  },
+  "author": {
+    "name": "Alisha Karma",
+    "email": "lishykarma99@gmail.com",
+    "url": "https://alishakarma.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codealisha99/kiro.git",
+    "directory": "apps/api"
   }
 }
