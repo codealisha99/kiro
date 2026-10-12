@@ -40,9 +40,10 @@
     "turbo": "^2.3.3",
     "typescript": "^5.6.3"
   },
-  "description": "Kiro \u2014 a permission-aware company knowledge desk with source-backed answers.",
+  "description": "Kiro — a permission-aware company knowledge desk with source-backed answers.",
   "author": {
     "name": "Alisha Karma",
+    "email": "lishykarma99@gmail.com",
     "url": "https://alishakarma.com"
   },
   "repository": {

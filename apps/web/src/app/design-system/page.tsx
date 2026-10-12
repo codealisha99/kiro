@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { WorkspaceIcon, type IconName } from "@/components/WorkspaceIcon";
+import { KiroMark, WorkspaceIcon, type IconName } from "@/components/WorkspaceIcon";
 import {
   Alert,
   Badge,
@@ -40,8 +40,7 @@ export default function DesignSystemPage() {
     <div className="system" data-theme={dark ? "dark" : "light"}>
       <aside className="system-nav">
         <Link href="/" className="system-brand">
-          kiro
-          <span className="system-brand-dot" />
+          <KiroMark /> Kiro
         </Link>
         <p className="section-label">Design language / 01</p>
         <nav aria-label="Design system sections">
@@ -93,6 +92,21 @@ export default function DesignSystemPage() {
             <span>02 / Give words room</span>
             <span>03 / Keep the source visible</span>
           </div>
+        </section>
+
+        <section className="system-section" aria-labelledby="brand-title">
+          <div className="system-section-heading">
+            <div>
+              <p className="section-label">Product identity</p>
+              <h2 id="brand-title">One mark. A clear source.</h2>
+            </div>
+            <p>Kiro is the product. Creator credits identify its maintainer.</p>
+          </div>
+          <Card className="system-brand-reference">
+            <span className="system-wordmark"><KiroMark /> Kiro</span>
+            <p>Use the same K-shaped mark across navigation, sign-in, and the browser icon. Keep its proportions and leave clear space around it.</p>
+            <a href="/brand/kiro-wordmark.svg">View the wordmark asset ↗</a>
+          </Card>
         </section>
 
         <section className="system-section" aria-labelledby="palette-title">

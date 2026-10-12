@@ -1,4 +1,4 @@
-![Kiro](apps/web/public/cover.png)
+![Kiro](apps/web/public/brand/kiro-wordmark.svg)
 
 # Kiro
 
@@ -47,7 +47,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-The API container applies Prisma migrations on startup. Do **not** also run `pnpm dev` while the compose `api`/`web`/`ai` services are up — they share ports 3000/3001/8000.
+The default Java API container applies Flyway migrations on startup. The optional NestJS API uses Prisma; keep their migration histories separate. Do **not** also run `pnpm dev` while the compose `api`/`web`/`ai` services are up — they share ports 3000/3001/8000.
 
 ### Demo walkthrough
 
@@ -64,7 +64,7 @@ See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the full step-by-step: accounts to 
 
 Maintained by [Alisha Karma](https://alishakarma.com) ([codealisha99](https://github.com/codealisha99)). [Contact](mailto:lishykarma99@gmail.com) · [X](https://x.com/karmalisha). This attribution identifies the current maintainer; historical contributors remain recorded in Git.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [third-party UI credits](docs/ui-attributions.md), and [the product audit](docs/audit/product-audit.md). No project license is currently declared.
+See [the ownership and brand guide](docs/OWNERSHIP.md), [CONTRIBUTING.md](CONTRIBUTING.md), [third-party UI credits](docs/ui-attributions.md), and [the product audit](docs/audit/product-audit.md). No project license is currently declared.
 
 ```bash
 pnpm typecheck
