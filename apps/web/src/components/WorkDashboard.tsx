@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, Dialog, Field, Input, Select } from "@/components/ui";
-import { workApi, type WorkDetail, type WorkInsight, type WorkOverview, type WorkProject, type WorkTask, type WorkScenario } from "@/lib/work-api";
+import { workApi, type WorkDetail, type WorkInsight, type WorkNotification, type WorkOverview, type WorkProject, type WorkTask, type WorkScenario } from "@/lib/work-api";
 import "./work-dashboard.css";
+import { orgApi, type DataRow } from "@/lib/organization-api";
 
 const emptyTask = { title: "", status: "TODO" as WorkTask["status"], assigneeId: "", remainingHours: "", dueDate: "" };
 const labels = { OVERDUE: "Overdue commitment", BLOCKED: "Recorded blocker", UNASSIGNED: "Ownership gap" };
@@ -12,11 +13,16 @@ const recommendations = {
   BLOCKED: "Confirm the blocker and identify who can resolve it.",
   UNASSIGNED: "Agree on an owner with project access.",
 };
+type ScenarioOutcomeStatus = "IN_PROGRESS" | "DELIVERED" | "NOT_DELIVERED" | "CANCELLED";
 
 export default function WorkDashboard() {
+  const [teams, setTeams] = useState<DataRow[]>([]);
+  const [audienceTeam, setAudienceTeam] = useState("");
+  const [restricted, setRestricted] = useState(true);
   const [overview, setOverview] = useState<WorkOverview | null>(null);
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [insights, setInsights] = useState<WorkInsight[]>([]);
+  const [notifications, setNotifications] = useState<WorkNotification[]>([]);
   const [detail, setDetail] = useState<WorkDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,6 +40,11 @@ export default function WorkDashboard() {
   const [grantPermission, setGrantPermission] = useState("READ");
   const [dependency, setDependency] = useState({ task: "", target: "", rationale: "" });
   const [scenario, setScenario] = useState<WorkScenario | null>(null);
+  const [approvalReason, setApprovalReason] = useState("");
+  const [outcomeDraft, setOutcomeDraft] = useState({ status: "IN_PROGRESS" as ScenarioOutcomeStatus, actualHours: "", note: "" });
+  const [savedScenarios, setSavedScenarios] = useState<WorkScenario[]>([]);
+  const [selectedScenarioIds, setSelectedScenarioIds] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<WorkScenario[] | null>(null);
   const [assumptions, setAssumptions] = useState({ name: "", periodStart: "", periodEnd: "", availableHours: "", proposedHours: "", rationale: "" });
   const [projectOffset, setProjectOffset] = useState(0);
   const [taskOffset, setTaskOffset] = useState(0);
@@ -43,11 +54,12 @@ export default function WorkDashboard() {
   const refresh = useCallback(async () => {
     const run = ++generation.current;
     setLoading(true); setError(""); setDetail(null); setEvidence(null); setImpact(null); setHistory(null); setScenario(null);
+    setSavedScenarios([]); setSelectedScenarioIds([]); setComparison(null);
     try {
-      const [o, p, i] = await Promise.all([workApi.overview(), workApi.projects(projectOffset), workApi.insights(insightOffset)]);
-      if (run === generation.current) { setOverview(o); setProjects(p); setInsights(i); }
+      const [o, p, i, n] = await Promise.all([workApi.overview(), workApi.projects(projectOffset), workApi.insights(insightOffset), workApi.notifications()]);
+      if (run === generation.current) { setOverview(o); setProjects(p); setInsights(i); setNotifications(n); }
     } catch (e) {
-      if (run === generation.current) { setOverview(null); setProjects([]); setInsights([]); setError((e as Error).message); }
+      if (run === generation.current) { setOverview(null); setProjects([]); setInsights([]); setNotifications([]); setError((e as Error).message); }
     } finally { if (run === generation.current) setLoading(false); }
   }, [projectOffset, insightOffset]);
   useEffect(() => {
@@ -63,14 +75,23 @@ export default function WorkDashboard() {
   }
   async function openProject(id: string, offset = 0) {
     setDetail(null); setHistory(null); setImpact(null); setEvidence(null); setScenario(null);
-    const d = await workApi.detail(id, offset);
-    setDetail(d); setTaskOffset(offset); setDependency({ task: "", target: "", rationale: "" });
+    setComparison(null);
+    const [d, scenarios] = await Promise.all([workApi.detail(id, offset), workApi.scenarios(id)]);
+    setTeams(await orgApi.teams());
+    setAudienceTeam(d.project.team_id ?? ""); setRestricted(d.project.restricted ?? true);
+    setDetail(d); setSavedScenarios(scenarios); setSelectedScenarioIds([]); setTaskOffset(offset);
+    setDependency({ task: "", target: "", rationale: "" });
   }
   function editTask(t?: WorkTask) {
     setEditing(t ?? null);
     setTask(t ? { title: t.title, status: t.status, assigneeId: t.assignee_id ?? "",
       remainingHours: t.remaining_hours === null ? "" : String(t.remaining_hours), dueDate: t.due_date ?? "" } : emptyTask);
     setTaskOpen(true);
+  }
+  function inspectScenario(value: WorkScenario) {
+    setScenario(value); setApprovalReason("");
+    setOutcomeDraft({ status: value.outcome.status === "NONE" ? "IN_PROGRESS" : value.outcome.status,
+      actualHours: value.outcome.actual_hours == null ? "" : String(value.outcome.actual_hours), note: value.outcome.note ?? "" });
   }
 
   return <section className="work-dashboard" aria-busy={busy || loading}>
@@ -97,6 +118,19 @@ export default function WorkDashboard() {
         <p>Last task update: {overview.metrics.last_record_updated_at ? new Date(overview.metrics.last_record_updated_at).toLocaleString() : "No tasks recorded"}.
           This view is a snapshot; refresh after access or work changes.</p></details>
     </>}
+    <Card><h2>Notifications</h2><p>In-app updates for scenario approval requests and decisions, limited to projects you can still access.</p>
+      {!notifications.length ? <p>No notifications.</p> : <ul className="work-list">{notifications.map(n => <li key={n.id}>
+        <Badge tone={n.read_at ? "neutral" : "info"}>{n.read_at ? "Read" : "New"}</Badge>
+        <p>{n.kind === "SCENARIO_APPROVAL_REQUESTED" ? "A scenario needs review" : "A scenario approval was decided"} · {n.project_name} · {new Date(n.created_at).toLocaleString()}</p>
+        <div className="work-actions"><Button variant="secondary" disabled={busy} onClick={() => void action(async () => {
+          inspectScenario(await workApi.scenarioResult(n.resource_id));
+          if (!n.read_at) { await workApi.readNotification(n.id); setNotifications(current => current.map(item => item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item)); }
+        })}>Review scenario</Button>
+          {!n.read_at && <Button variant="secondary" disabled={busy} onClick={() => void action(async () => {
+            await workApi.readNotification(n.id); setNotifications(current => current.map(item => item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item));
+          })}>Mark read</Button>}</div>
+      </li>)}</ul>}
+    </Card>
     <div className="work-columns">
       <Card><h2>Projects</h2>
         <form className="work-form" onSubmit={e => { e.preventDefault(); void action(async () => {
@@ -159,8 +193,9 @@ export default function WorkDashboard() {
       {detail.project.can_write && <details><summary>Evaluate proposed work</summary>
         <p>Compare recorded effort with explicit assumptions for this project. This does not forecast delivery or account for work outside this project.</p>
         <form className="work-form" onSubmit={e => { e.preventDefault(); void action(async () => {
-          setScenario(await workApi.scenario(detail.project.id, { ...assumptions,
+          inspectScenario(await workApi.scenario(detail.project.id, { ...assumptions,
             availableHours: Number(assumptions.availableHours), proposedHours: Number(assumptions.proposedHours) }));
+          setSavedScenarios(await workApi.scenarios(detail.project.id));
         }); }}>
           <Field label="Scenario name">{f => <Input {...f} required maxLength={200} value={assumptions.name} onChange={e => setAssumptions({ ...assumptions, name: e.target.value })} />}</Field>
           <Field label="Planning period starts">{f => <Input {...f} required type="date" value={assumptions.periodStart} onChange={e => setAssumptions({ ...assumptions, periodStart: e.target.value })} />}</Field>
@@ -171,6 +206,32 @@ export default function WorkDashboard() {
           <Button type="submit" disabled={busy}>Evaluate and save scenario</Button>
         </form>
       </details>}
+      <details className="scenario-compare">
+        <summary>Compare saved scenarios</summary>
+        <p>Compare two to four saved scenarios for this project. Each result uses its saved task evidence and declared assumptions.</p>
+        {!savedScenarios.length ? <p>No saved scenarios yet. Create one above to start a comparison.</p> : <>
+          <ul className="scenario-choices">{savedScenarios.map(s => <li key={s.id}>
+            <div className="scenario-choice-row"><label><input type="checkbox" checked={selectedScenarioIds.includes(s.id)} disabled={busy || (!selectedScenarioIds.includes(s.id) && selectedScenarioIds.length >= 4)}
+              onChange={e => setSelectedScenarioIds(current => e.target.checked ? [...current, s.id] : current.filter(id => id !== s.id))} />
+              <span><strong>{s.name}</strong><small>{s.assessment.replaceAll("_", " ")} · {s.period_start} to {s.period_end} · Approval: {s.approval.status.toLowerCase()}</small></span>
+            </label><Button variant="secondary" disabled={busy} onClick={() => inspectScenario(s)}>Review</Button></div>
+          </li>)}</ul>
+          <Button variant="secondary" disabled={busy || selectedScenarioIds.length < 2} onClick={() => void action(async () => {
+            setComparison(await workApi.compareScenarios(detail.project.id, selectedScenarioIds));
+          })}>Compare selected scenarios</Button>
+        </>}
+      </details>
+      {detail.project.can_manage_access && <details><summary>Project audience & team</summary>
+        <p>Restricted projects use only ownership and explicit project grants. Sharing with organizational scope lets team members read and scoped roles read or write according to their configured permissions.</p>
+        <form className="work-form" onSubmit={e => { e.preventDefault(); void action(async () => {
+          await orgApi.audience(detail.project.id, audienceTeam || null, restricted); await openProject(detail.project.id);
+        }); }}>
+          <Field label="Owning team">{f => <Select {...f} disabled={busy} value={audienceTeam} onChange={e => setAudienceTeam(e.target.value)}>
+            <option value="">No team</option>{teams.map(t => <option key={String(t.id)} value={String(t.id)}>{String(t.name)}</option>)}</Select>}</Field>
+          <Field label="Project visibility">{f => <Select {...f} disabled={busy} value={restricted ? "restricted" : "organization"} onChange={e => setRestricted(e.target.value === "restricted")}>
+            <option value="restricted">Restricted — explicit project grants only</option><option value="organization">Share with team and scoped organizational roles</option></Select>}</Field>
+          <Button type="submit" disabled={busy}>Save project audience</Button>
+        </form></details>}
       {detail.project.can_manage_access && <details><summary>Manage explicit project access</summary>
         <p>Use an existing workspace member’s ID. Organization administrators do not automatically receive access.</p>
         <form className="work-form" onSubmit={e => { e.preventDefault(); void action(async () => {
@@ -230,12 +291,56 @@ export default function WorkDashboard() {
         {impact.tasks.length ? <ul>{impact.tasks.map(t => <li key={t.id}>{t.title} — {t.status}</li>)}</ul> : <p>No accessible downstream dependencies recorded.</p>}
         <p>This is a relationship query, not a delivery forecast.</p></>}
     </Dialog>
-    <Dialog open={!!scenario} onClose={() => setScenario(null)} title="Scenario result">
+    <Dialog open={!!scenario} onClose={() => setScenario(null)} closeDisabled={busy} title="Scenario result">
       {scenario && <><Badge>What-if calculation</Badge><h3>{scenario.name}</h3><p>{scenario.assessment.replaceAll("_", " ")}</p>
         <p>Known remaining effort: {scenario.known_remaining_hours} hours. Proposed work: {scenario.proposed_hours} hours. Assumed availability: {scenario.available_hours} hours.</p>
         <p>{scenario.remaining_assumed_hours === null ? "Capacity conclusion withheld because required data is missing." : `Remaining assumed capacity: ${scenario.remaining_assumed_hours} hours.`}</p>
         <p>{scenario.missing_estimates} missing estimates; {scenario.undated_tasks} undated tasks.</p><p>{scenario.method}</p><p>{scenario.limitations}</p>
+        <p>Approval status: {scenario.approval.status.toLowerCase()}. {scenario.approval.reason}</p>
+        {scenario.approval.status === "NONE" && detail?.project.can_write && <Button disabled={busy} onClick={() => void action(async () => {
+          setScenario(await workApi.requestScenarioApproval(scenario.id)); setSavedScenarios(await workApi.scenarios(detail.project.id));
+        })}>Request approval</Button>}
+        {scenario.approval.status === "PENDING" && scenario.approval.requested_by === detail?.viewer_id && <p>Waiting for a different project editor to review this request.</p>}
+        {scenario.approval.status === "PENDING" && detail?.project.can_write && scenario.approval.requested_by !== detail.viewer_id && <div className="work-form">
+          <Field label="Decision reason" hint="Required when rejecting this scenario.">{f => <Input {...f} maxLength={1000} disabled={busy} value={approvalReason} onChange={e => setApprovalReason(e.target.value)} />}</Field>
+          <div className="work-actions"><Button disabled={busy} onClick={() => void action(async () => {
+            setScenario(await workApi.decideScenarioApproval(scenario.id, "APPROVED", approvalReason, scenario.approval.version));
+            setSavedScenarios(await workApi.scenarios(detail.project.id));
+          })}>Approve</Button><Button variant="secondary" disabled={busy || !approvalReason.trim()} onClick={() => void action(async () => {
+            setScenario(await workApi.decideScenarioApproval(scenario.id, "REJECTED", approvalReason, scenario.approval.version));
+            setSavedScenarios(await workApi.scenarios(detail.project.id));
+          })}>Reject</Button></div>
+        </div>}
+        <p>Approval records an internal decision only. It does not execute a change in an external service.</p>
+        <p>Recorded outcome: {scenario.outcome.status === "NONE" ? "not recorded" : scenario.outcome.status.toLowerCase().replaceAll("_", " ")}.
+          {scenario.outcome.actual_hours == null ? " Actual effort not recorded." : ` Actual effort: ${scenario.outcome.actual_hours} hours (${scenario.outcome.actual_hours - scenario.proposed_hours >= 0 ? "+" : ""}${scenario.outcome.actual_hours - scenario.proposed_hours} hours against the estimate).`}
+          {scenario.outcome.note ? ` ${scenario.outcome.note}` : ""}</p>
+        {detail?.project.can_write && <form className="work-form" onSubmit={e => { e.preventDefault(); void action(async () => {
+          const updated = await workApi.saveScenarioOutcome(scenario.id, { status: outcomeDraft.status,
+            actualHours: outcomeDraft.actualHours === "" ? null : Number(outcomeDraft.actualHours), note: outcomeDraft.note,
+            expectedVersion: scenario.outcome.version });
+          inspectScenario(updated); setSavedScenarios(await workApi.scenarios(detail.project.id));
+        }); }}>
+          <Field label="Outcome status">{f => <Select {...f} disabled={busy} value={outcomeDraft.status} onChange={e => setOutcomeDraft({ ...outcomeDraft, status: e.target.value as ScenarioOutcomeStatus })}>
+            <option value="IN_PROGRESS">In progress</option><option value="DELIVERED">Delivered</option><option value="NOT_DELIVERED">Not delivered</option><option value="CANCELLED">Cancelled</option>
+          </Select>}</Field>
+          <Field label="Actual effort on proposed work (hours)" hint="Leave blank if unknown.">{f => <Input {...f} disabled={busy} type="number" min="0" max="100000" step="0.01" value={outcomeDraft.actualHours} onChange={e => setOutcomeDraft({ ...outcomeDraft, actualHours: e.target.value })} />}</Field>
+          <Field label="Outcome note">{f => <Input {...f} required maxLength={1000} disabled={busy} value={outcomeDraft.note} onChange={e => setOutcomeDraft({ ...outcomeDraft, note: e.target.value })} />}</Field>
+          <Button type="submit" disabled={busy || !outcomeDraft.note.trim()}>Save outcome</Button>
+        </form>}
         <details><summary>Evidence snapshot</summary><ul>{scenario.evidence.map(e => <li key={e.task_id}>Task {e.task_id}, version {e.task_version}: {e.remaining_hours ?? "unknown"} hours, due {e.due_date ?? "unknown"}.</li>)}</ul></details></>}
+    </Dialog>
+    <Dialog open={!!comparison} onClose={() => setComparison(null)} title="Scenario comparison">
+      {comparison && <><p>Saved calculations for the selected project. Values retain each scenario’s original evidence snapshot.</p>
+        <div className="scenario-table-wrap"><table className="scenario-table"><thead><tr><th>Scenario</th><th>Assessment</th><th>Approval</th><th>Outcome</th><th>Actual hours</th><th>Recorded effort</th><th>Proposed</th><th>Assumed capacity</th><th>Remaining</th><th>Data gaps</th></tr></thead>
+          <tbody>{comparison.map(s => <tr key={s.id}><th scope="row">{s.name}</th><td>{s.assessment.replaceAll("_", " ")}</td>
+            <td>{s.approval.status.toLowerCase()}</td><td>{s.outcome.status.toLowerCase().replaceAll("_", " ")}</td>
+            <td>{s.outcome.actual_hours == null ? "Unknown" : `${s.outcome.actual_hours} h`}</td>
+            <td>{s.known_remaining_hours} h</td><td>{s.proposed_hours} h</td><td>{s.available_hours} h</td>
+            <td>{s.remaining_assumed_hours === null ? "Withheld" : `${s.remaining_assumed_hours} h`}</td>
+            <td>{s.missing_estimates} missing estimates; {s.undated_tasks} undated</td></tr>)}</tbody></table></div>
+        <p>These are assumption-based what-if calculations, not forecasts. Capacity is withheld for scenarios with missing estimates or undated tasks.</p>
+      </>}
     </Dialog>
     <Dialog open={!!history} onClose={() => setHistory(null)} title="Project change history">
       <p>Most recent 100 authorized events. Earlier task versions remain preserved.</p>
