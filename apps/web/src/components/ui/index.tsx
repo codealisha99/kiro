@@ -196,8 +196,10 @@ export function Dialog({
   title,
   children,
   className,
+  closeDisabled = false,
 }: {
   open: boolean;
+  closeDisabled?: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
@@ -238,10 +240,10 @@ export function Dialog({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (!closeDisabled) onClose();
       }}
       onClick={(event) => {
-        if (event.target !== event.currentTarget) return;
+        if (closeDisabled || event.target !== event.currentTarget) return;
         const bounds = event.currentTarget.getBoundingClientRect();
         if (
           event.clientX < bounds.left ||
@@ -259,6 +261,7 @@ export function Dialog({
           size="small"
           className="ui-dialog-close"
           aria-label={`Close ${title.toLowerCase()}`}
+          disabled={closeDisabled}
           onClick={onClose}
         >
           <svg

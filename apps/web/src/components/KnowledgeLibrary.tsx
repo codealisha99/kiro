@@ -69,6 +69,10 @@ export default function KnowledgeLibrary({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (saving || (mode === "file" && !file)) return;
+    if (mode === "text" && (!title.trim() || !content.trim())) {
+      setError("Enter a title and document text; spaces alone aren’t enough.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -83,7 +87,11 @@ export default function KnowledgeLibrary({
               content: content.trim(),
               classification,
             });
-      setNotice(`“${result.title}” added to your library.`);
+      setNotice(result.created
+        ? `“${result.title}” added to your library.`
+        : result.contentChanged
+          ? `“${result.title}” updated to version ${result.version}.`
+          : `“${result.title}” is already up to date.`);
       setAdding(false);
       setFile(null);
       setTitle("");
@@ -102,11 +110,14 @@ export default function KnowledgeLibrary({
   }
 
   async function seed() {
+    if (seeding) return;
     setSeeding(true);
     setError(null);
     try {
       const result = await api.seedDemo();
-      setNotice(`${result.documentCount} sample documents added.`);
+      setNotice(result.seeded
+        ? `${result.documentCount} sample documents are ready to explore.`
+        : "Sample documents are already in your library.");
       await onRefresh();
     } catch (err) {
       setError(
@@ -165,7 +176,7 @@ export default function KnowledgeLibrary({
             <option value="internal">Workspace</option>
             <option value="public">Public within workspace</option>
             <option value="confidential">Confidential</option>
-            <option value="restricted">Only you</option>
+            <option value="restricted">Restricted</option>
           </Select>
           <Select
             aria-label="Sort documents"
@@ -210,7 +221,7 @@ export default function KnowledgeLibrary({
               {doc.classification === "internal"
                 ? "Workspace"
                 : doc.classification === "restricted"
-                  ? "Only you"
+                  ? "Restricted"
                   : doc.classification === "confidential"
                     ? "Confidential"
                     : "Public"}
@@ -268,6 +279,7 @@ export default function KnowledgeLibrary({
       )}
       <Dialog
         open={adding}
+        closeDisabled={saving}
         title="Add a document"
         onClose={() => {
           if (!saving) setAdding(false);
@@ -319,6 +331,7 @@ export default function KnowledgeLibrary({
                 placeholder={file?.name ?? "e.g. Customer refund policy"}
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
+                disabled={saving}
                 required={mode === "text"}
               />
             )}
@@ -331,6 +344,7 @@ export default function KnowledgeLibrary({
                   placeholder="Paste the content you want your team to find…"
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
+                  disabled={saving}
                   required
                   rows={6}
                 />
@@ -344,6 +358,7 @@ export default function KnowledgeLibrary({
             {(field) => (
               <Select
                 {...field}
+                disabled={saving}
                 value={classification}
                 onChange={(event) => setClassification(event.target.value)}
               >
@@ -352,7 +367,7 @@ export default function KnowledgeLibrary({
                 <option value="confidential">
                   Managers and administrators
                 </option>
-                <option value="restricted">Only you</option>
+                <option value="restricted">Only you (restricted)</option>
               </Select>
             )}
           </Field>

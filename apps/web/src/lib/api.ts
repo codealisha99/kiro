@@ -61,12 +61,29 @@ async function sendRequest(
   path: string,
   options: RequestInit,
 ): Promise<Response> {
+  const controller = new AbortController();
+  // Generation and ingestion can be slower than ordinary reads. Never auto-retry writes.
+  const slowOperation = options.method !== "GET" && (
+    ["/brain/query", "/documents", "/documents/upload", "/documents/demo", "/evals/rag"].includes(path)
+    || options.method === "PATCH"
+  );
+  const timeoutMs = slowOperation ? 120_000 : 20_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(`${API_URL}${path}`, options);
+    const response = await fetch(`${API_URL}${path}`, { ...options, signal: controller.signal });
+    // Read the body inside the deadline too, including stalled streamed responses.
+    const body = await response.text();
+    return new Response(body || null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
   } catch {
-    throw new Error(
-      "We couldn’t reach Kiro. Check your connection and try again.",
-    );
+    throw new Error(controller.signal.aborted
+      ? "This request took too long. Check your library or conversation before retrying; it may have completed."
+      : "We couldn’t reach Kiro. Check your connection and try again.");
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -81,7 +98,7 @@ function expireSession(path: string, token: string | null) {
   window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
@@ -146,7 +163,11 @@ export const api = {
     request<SourceDto>("/sources", { method: "POST", body }),
 
   documents: () => request<DocumentListItem[]>("/documents"),
-  document: (id: string) => request<DocumentDetail>(`/documents/${id}`),
+  document: (id: string) => request<DocumentDetail>(`/documents/${encodeURIComponent(id)}`),
+  documentVersion: (id: string, version: number) =>
+    request<DocumentDetail>(`/documents/${encodeURIComponent(id)}/versions/${version}`),
+  updateDocument: (id: string, body: { title: string; content: string; expectedVersion: number }) =>
+    request<DocumentDetail>(`/documents/${encodeURIComponent(id)}`, { method: "PATCH", body }),
   ingestDocument: (body: {
     title: string;
     content: string;

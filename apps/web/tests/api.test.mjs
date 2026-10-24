@@ -116,3 +116,64 @@ test("an old request cannot expire a newly signed-in session", async () => {
   assert.equal(store.get("kiro-token"), "new-session");
   assert.deepEqual(events, []);
 });
+
+
+test("a stalled response body is aborted and offers safe retry guidance", async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback) => originalSetTimeout(callback, 5);
+  globalThis.fetch = async (_url, options) => ({
+    text: () => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }),
+  });
+  try {
+    await assert.rejects(api.documents(), /may have completed/);
+    assert.equal(store.get("kiro-token"), "test-session");
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test("document removal uses the authorized delete endpoint", async () => {
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith("/documents/d1"));
+    assert.equal(options.method, "DELETE");
+    assert.equal(options.headers.Authorization, "Bearer test-session");
+    return new Response(JSON.stringify({ ok: true }));
+  };
+  assert.deepEqual(await api.deleteDocument("d1"), { ok: true });
+});
+
+
+test("historical documents use the version endpoint and encoded document id", async () => {
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith("/documents/doc%2Fid/versions/2"));
+    assert.equal(options.method, "GET");
+    return new Response(JSON.stringify({ selectedVersion: 2, content: "Earlier policy" }));
+  };
+  assert.equal((await api.documentVersion("doc/id", 2)).content, "Earlier policy");
+});
+
+test("a stale revision remains a recoverable conflict with the original session", async () => {
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith("/documents/d1"));
+    assert.equal(options.method, "PATCH");
+    assert.deepEqual(JSON.parse(options.body), { title: "Policy", content: "Draft", expectedVersion: 1 });
+    return new Response(JSON.stringify({ message: "A newer version was saved" }), { status: 409 });
+  };
+  await assert.rejects(api.updateDocument("d1", { title: "Policy", content: "Draft", expectedVersion: 1 }),
+    (error) => error instanceof ApiError && error.status === 409);
+  assert.equal(store.get("kiro-token"), "test-session");
+});
+
+test("sign-out has a shorter deadline than document revisions", async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const deadlines = [];
+  globalThis.setTimeout = (callback, delay) => { deadlines.push(delay); return originalSetTimeout(callback, delay); };
+  globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }));
+  try {
+    await api.logout();
+    await api.updateDocument("d1", { title: "Policy", content: "Draft", expectedVersion: 1 });
+    assert.deepEqual(deadlines, [20_000, 120_000]);
+  } finally { globalThis.setTimeout = originalSetTimeout; }
+});

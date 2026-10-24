@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@/components/ui";
+import { Alert, Badge } from "@/components/ui";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import type { CitationSource, DocumentDetail } from "@kiro/shared";
 
@@ -29,6 +29,9 @@ export default function EvidencePanel({
     );
 
   const excerpt = citation?.excerpt?.trim();
+  const currentVersion = document.versions[0]?.version ?? document.versionCount;
+  const selectedVersion = document.selectedVersion ?? currentVersion;
+  const historical = selectedVersion !== currentVersion;
   const match = excerpt ? findPassage(document.content, excerpt) : null;
   return (
     <div className="source-reader">
@@ -37,24 +40,29 @@ export default function EvidencePanel({
           {document.classification === "internal"
             ? "Workspace"
             : document.classification === "restricted"
-              ? "Only you"
+              ? "Restricted"
               : document.classification}
         </Badge>
-        <span>Version {document.versionCount}</span>
+        <span>Version {selectedVersion}{historical ? " · Earlier version" : " · Current"}</span>
       </div>
       <h3 className="evidence-title">{document.title}</h3>
       <p className="source-file">
         <WorkspaceIcon name="file" />
-        {document.filename ?? "Pasted text"}
+        {document.filename ?? "Text"}
         <span>
-          Updated{" "}
-          {new Date(document.updatedAt).toLocaleDateString(undefined, {
+          Saved{" "}
+          {new Date(document.versionCreatedAt ?? document.updatedAt).toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
             year: "numeric",
           })}
         </span>
       </p>
+      {historical && (
+        <Alert tone="warning">
+          You’re reading version {selectedVersion}{citation ? ", used in this answer" : ""}. The current document is version {currentVersion}. New answers use the current approved version.
+        </Alert>
+      )}
       {excerpt && (
         <section
           className="source-excerpt"
@@ -62,7 +70,7 @@ export default function EvidencePanel({
         >
           <p>
             <WorkspaceIcon name="book" />
-            Passage used in this answer
+            Passage used in this answer{citation ? ` · Version ${citation.version}` : ""}
           </p>
           <blockquote>{excerpt}</blockquote>
         </section>
