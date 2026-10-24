@@ -2,9 +2,11 @@
 
 # Kiro
 
-A permission-aware company knowledge desk: add documents, ask questions, and inspect the evidence behind each answer. The default stack is Next.js, Spring Boot, PostgreSQL/pgvector, Redis and FastAPI. Model APIs are optional; keyword search and labelled source extracts work without them. The Java API also provides persisted projects, tasks, scoped work metrics, dependency queries, evidence-backed insights with review states, and bounded what-if calculations. Drive, Slack, CRM and S3 integrations are stubs.
+A permission-aware company knowledge desk: add documents, ask questions, and inspect the evidence behind each answer. The default stack is Next.js, Spring Boot, PostgreSQL/pgvector, Redis and FastAPI. Model APIs are optional; keyword search and labelled source extracts work without them. The Java API also provides persisted projects, tasks, scoped work metrics, dependency queries, evidence-backed insights with review states, and bounded what-if calculations. Departments, teams, reporting relationships and configurable scoped roles support five dashboard views. Read-only GitHub, Slack, Linear, HubSpot, Xero and BambooHR connectors accept credentials later; live provider validation remains pending. See [organization and integration setup](docs/ORGANIZATION_INTEGRATIONS.md) for capabilities and limits. Drive and S3 remain stubs.
 
 ## Start locally
+
+Implementation progress and remaining requirements: [original specification completion status](docs/PLATFORM_COMPLETION_STATUS.md). The full company-intelligence specification is not yet complete.
 
 Requires Docker with Compose. Node 20+ and pnpm 10.30.3 are required for local development/checks.
 
