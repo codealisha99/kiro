@@ -1,5 +1,7 @@
 # Organizational intelligence engineering report — 2026-10-24
 
+> Historical report for the earlier work/insight slice. Its counts, connector status, dashboard status, next steps and Git state describe that earlier checkpoint and have been superseded. See [current specification completion status](PLATFORM_COMPLETION_STATUS.md) and [organization/integration setup](ORGANIZATION_INTEGRATIONS.md) for the current implementation. The full original specification remains incomplete.
+
 ## Scope and initial audit
 
 The repository and public product are **Kiro**. They have not been renamed. This session began with substantial uncommitted work: document revisions/security fixes, the V3 citation migration, the V4 work model, a work dashboard, work service tests, and a live API test script. Those changes were preserved. This report distinguishes that starting implementation from the insight-triage work added in this session.
@@ -73,15 +75,15 @@ Limits: browser checks cover the changed work/evidence surface, not every applic
 | --- | --- |
 | Explicit project access, tenant isolation, optimistic task edits | Implemented and verified in the existing work slice. |
 | Work metrics and evidence-backed overdue/blocked/unassigned rules | Implemented and verified; manual structured data only, no utilization inferred without availability. |
-| Insight acknowledgement/dismissal/reassessment/audit | Implemented and verified in this session. Assignment, notifications, outcome tracking and configurable thresholds remain absent. |
+| Insight acknowledgement/dismissal/reassessment/audit | Implemented and verified in this session. Assignment and configurable thresholds remain absent. The current increment adds in-app notifications for scenario approval requests and decisions only; these additions are unverified. |
 | Dependency graph and temporal task history | Partially implemented: authorized task dependencies, cycle rejection and immutable snapshots verified. No organization-wide entity graph, goals, decision graph or temporal query language. |
-| Scenario planning | Partially implemented: bounded single-project effort calculation and saved evidence verified. No scenario comparison UI, skills matching, cross-project capacity, forecasting or execution. |
-| Authentication and organizational authorization | Partially implemented: current sessions and explicit project ACLs verified. Configurable roles, departments, teams, reporting hierarchy and sensitive-record policies remain missing. |
+| Scenario planning | Partially implemented: bounded single-project effort calculation and saved evidence. The current increment adds saved-scenario comparison, two-editor approval records, in-app approval notifications, and manually recorded outcome/actual-hours tracking; these additions are unverified. No cross-project capacity, forecasting or external execution. |
+| Authentication and organizational authorization | Partially implemented: current sessions and explicit project ACLs are verified. The current working tree contains department, team, reporting, role-scope and project-audience APIs/schema plus organization and integration management views; these additions are unverified. |
 | Role-specific organizational dashboards | Not implemented. Existing dashboard is project-access scoped. |
 | Documents/RAG | Existing implementation preserved; regression tests pass. Live provider-backed generation/embedding quality is unverified and requires configuration. |
-| Structured conversational intelligence | Not implemented. Brain query still routes through RAG. |
+| Structured conversational intelligence | First slice added after this report: clear operational questions about tasks, projects, deadlines, workload, progress, risks, and capacity route through the existing brain conversation to the authorized organization dashboard. Policy and document questions continue to use evidence retrieval. Routing is deterministic and keyword based; it does not yet support arbitrary entity filters, follow-up resolution, or model-selected tools. This increment has not been verified. |
 | Real integrations and event normalization | Not implemented. Stub connectors report unconfigured; credentials alone will not make them functional. |
-| Approval requests and consequential action execution | Not implemented. Triage is an internal review action, not approval to modify external systems. |
+| Approval requests and consequential action execution | Scenario approval decisions are recorded by a different project editor with optimistic version checks, with in-app notifications; the current increment is unverified. No external action is executed and no provider connection has been accepted or verified. Insight triage remains a separate review action. |
 | CRM/marketing/finance/HR analytics | Not implemented. No fabricated data or provider status added. |
 | Production hardening | Partial: existing validation, session checks, health and logs retained. Reliable provider jobs, retention, organization provisioning, recovery drills and broader security review remain. |
 

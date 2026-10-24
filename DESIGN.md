@@ -1,5 +1,9 @@
 # Kiro design system
 
+## Organization workspace — 2026-10-24
+
+Company dashboards retain the existing editorial surfaces and shared controls. Show only granted dashboard views, label the calculated scope, and keep missing-data methodology beside metrics. Organization setup uses labeled forms and scrollable tables. Connected applications display actual sync state and explicit unconfigured states; a saved resource without credentials must never look connected. Page composition lives in `components/organization.css` and uses semantic tokens in both preview themes.
+
 ## Product and direction
 
 Kiro is an internal company knowledge desk. Teams ask questions, read answers, and inspect the authorized evidence beside them. The first impression should be **trustworthy and calm**, confirmed by the user on 2026-10-07.
