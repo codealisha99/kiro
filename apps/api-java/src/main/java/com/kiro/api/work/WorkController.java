@@ -21,6 +21,11 @@ public class WorkController {
   public Object projects(@AuthenticationPrincipal AuthenticatedPrincipal u,@RequestParam(defaultValue="0") @Min(0) int offset) { return work.projects(u,offset); }
   @PostMapping("/projects")
   public Object create(@AuthenticationPrincipal AuthenticatedPrincipal u,@Valid @RequestBody ProjectInput b) { return work.createProject(u,b); }
+  public record AudienceInput(String teamId, boolean restricted) {}
+  @PutMapping("/projects/{id}/audience")
+  public Object audience(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@RequestBody AudienceInput b) {
+    return work.organizationalScope(u,id,b.teamId(),b.restricted());
+  }
   @GetMapping("/projects/{id}")
   public Object detail(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@RequestParam(defaultValue="0") @Min(0) int offset) { return work.detail(u,id,offset); }
   @PostMapping("/projects/{id}/tasks")
@@ -37,6 +42,10 @@ public class WorkController {
   public Object impact(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return work.impact(u,id); }
   @GetMapping("/insights")
   public Object insights(@AuthenticationPrincipal AuthenticatedPrincipal u,@RequestParam(defaultValue="0") @Min(0) int offset) { return work.insightList(u,offset); }
+  @GetMapping("/notifications")
+  public Object notifications(@AuthenticationPrincipal AuthenticatedPrincipal u) { return work.notifications(u); }
+  @PostMapping("/notifications/{id}/read")
+  public Object readNotification(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return work.markNotificationRead(u,id); }
   @PostMapping("/insights/{id}/triage")
   public Object triage(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,
       @Valid @RequestBody InsightTriageInput b) { return work.triageInsight(u,id,b); }
@@ -44,6 +53,22 @@ public class WorkController {
   public Object history(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@RequestParam(defaultValue="0") @Min(0) int offset) { return work.history(u,id,offset); }
   @PostMapping("/projects/{id}/scenarios")
   public Object scenario(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@Valid @RequestBody ScenarioInput b) { return work.scenario(u,id,b); }
+  @GetMapping("/projects/{id}/scenarios")
+  public Object scenarios(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return work.scenarioList(u,id); }
+  @PostMapping("/projects/{id}/scenarios/compare")
+  public Object compareScenarios(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@Valid @RequestBody ScenarioCompareInput b) {
+    return work.compareScenarios(u,id,b);
+  }
   @GetMapping("/scenarios/{id}")
   public Object scenarioResult(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return work.scenarioResult(u,id); }
+  @PostMapping("/scenarios/{id}/approval")
+  public Object requestScenarioApproval(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) {
+    return work.requestScenarioApproval(u,id);
+  }
+  @PostMapping("/scenarios/{id}/approval/decision")
+  public Object decideScenarioApproval(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,
+      @Valid @RequestBody ScenarioApprovalInput b) { return work.decideScenarioApproval(u,id,b); }
+  @PutMapping("/scenarios/{id}/outcome")
+  public Object scenarioOutcome(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,
+      @Valid @RequestBody ScenarioOutcomeInput b) { return work.saveScenarioOutcome(u,id,b); }
 }

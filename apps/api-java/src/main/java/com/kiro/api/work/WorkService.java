@@ -23,11 +23,7 @@ public class WorkService {
   }
 
   // Applied inside every list/aggregate query, before data leaves the database.
-  static final String VISIBLE = """
-      p.tenant_id = ? AND (p.owner_id = ? OR EXISTS (
-        SELECT 1 FROM work_project_grants g WHERE g.tenant_id=p.tenant_id
-        AND g.project_id=p.id AND g.user_id=? AND g.revoked_at IS NULL))
-      """;
+  public static final String VISIBLE = com.kiro.api.organization.OrganizationAccess.READ;
   private Object[] scope(AuthenticatedPrincipal u) { return new Object[]{u.tenantId(),u.id(),u.id()}; }
   private String id() { return UUID.randomUUID().toString(); }
   private ResponseStatusException missing() { return new ResponseStatusException(HttpStatus.NOT_FOUND,"Work resource not found"); }
@@ -51,10 +47,8 @@ public class WorkService {
         u.tenantId(),u.id(),u.id(),id);
     if(rows.isEmpty()) throw missing();
     var p=rows.getFirst();
-    if(write && !u.id().equals(p.get("owner_id")) && db.queryForObject("""
-        SELECT count(*) FROM work_project_grants WHERE tenant_id=? AND project_id=? AND user_id=?
-        AND permission='WRITE' AND revoked_at IS NULL
-        """,Long.class,u.tenantId(),id,u.id())==0) {
+    if(write && db.queryForObject("SELECT count(*) FROM work_projects p WHERE "+com.kiro.api.organization.OrganizationAccess.WRITE+" AND p.id=?",
+        Long.class,u.tenantId(),u.id(),u.id(),id)==0) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Project write access required");
     }
     return p;
@@ -64,28 +58,21 @@ public class WorkService {
     var p=project(u,id,false);
     boolean owner=u.id().equals(p.get("owner_id"));
     p.put("can_manage_access",owner);
-    p.put("can_write",owner || db.queryForObject("""
-        SELECT count(*) FROM work_project_grants WHERE tenant_id=? AND project_id=? AND user_id=?
-        AND permission='WRITE' AND revoked_at IS NULL
-        """,Long.class,u.tenantId(),id,u.id())>0);
-    return Map.of("project",p,"tasks",db.queryForList("""
+    p.put("can_write",db.queryForObject("SELECT count(*) FROM work_projects p WHERE "+com.kiro.api.organization.OrganizationAccess.WRITE+" AND p.id=?",
+        Long.class,u.tenantId(),u.id(),u.id(),id)>0);
+    return Map.of("project",p,"viewer_id",u.id(),"tasks",db.queryForList("""
         SELECT * FROM work_tasks WHERE tenant_id=? AND project_id=? ORDER BY created_at,id LIMIT 100 OFFSET ?
         """,u.tenantId(),id,offset),"members",db.queryForList("""
-        SELECT u.id,u.name FROM users u WHERE u."tenantId"=? AND
-        (u.id=? OR EXISTS (SELECT 1 FROM work_project_grants g WHERE g.tenant_id=u."tenantId"
-        AND g.user_id=u.id AND g.project_id=? AND g.revoked_at IS NULL)) ORDER BY u.id
-        """,u.tenantId(),p.get("owner_id"),id));
+        SELECT u.id,u.name FROM users u JOIN work_projects p ON p.tenant_id=u."tenantId" WHERE p.id=? AND
+        """+VISIBLE.replace("p.tenant_id=?", "p.tenant_id=u.\"tenantId\"").replace("p.owner_id=?", "p.owner_id=u.id").replace("?::text", "u.id::text")+
+        " AND u.\"tenantId\"=? ORDER BY u.id LIMIT 500",id,u.tenantId()));
   }
 
   public Map<String,Object> saveTask(AuthenticatedPrincipal u,String projectId,String taskId,TaskInput input) {
     project(u,projectId,true);
     if(input.assigneeId()!=null && !input.assigneeId().isBlank()) {
-      long members=db.queryForObject("""
-          SELECT count(*) FROM users u JOIN work_projects p ON p.tenant_id=u."tenantId"
-          WHERE p.id=? AND p.tenant_id=? AND u.id=? AND (p.owner_id=u.id OR EXISTS (
-          SELECT 1 FROM work_project_grants g WHERE g.tenant_id=p.tenant_id AND g.project_id=p.id
-          AND g.user_id=u.id AND g.revoked_at IS NULL))
-          """,Long.class,projectId,u.tenantId(),input.assigneeId());
+      long members=db.queryForObject("SELECT count(*) FROM work_projects p WHERE "+VISIBLE+" AND p.id=?",
+          Long.class,u.tenantId(),input.assigneeId(),input.assigneeId(),projectId);
       if(members==0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Assignee must have project access");
     }
     String assignee=input.assigneeId()==null || input.assigneeId().isBlank()?null:input.assigneeId();
@@ -191,7 +178,7 @@ public class WorkService {
         FROM work_tasks t JOIN work_projects p ON p.id=t.project_id AND p.tenant_id=t.tenant_id WHERE
         """+VISIBLE,scope(u));
     return Map.of("metrics",metrics,"calculatedAt",java.time.Instant.now(),
-        "scope","Projects you own or have an explicit grant to",
+        "scope","Projects permitted by ownership, explicit grants, or organizational scope",
         "method","Recorded tasks; overdue means unfinished and due before today (UTC). Hours sum known remaining estimates only.",
         "period","Current recorded state","freshness","Manual records; no external synchronization",
         "utilizationUnavailable","No declared availability or bounded planning period. Utilization cannot be calculated.");
@@ -267,6 +254,131 @@ public class WorkService {
     return scenarioResult(u,scenarioId);
   }
 
+  @Transactional(readOnly=true)
+  public List<Map<String,Object>> scenarioList(AuthenticatedPrincipal u,String projectId) {
+    project(u,projectId,false);
+    var ids=db.queryForList("SELECT id FROM work_scenarios WHERE tenant_id=? AND project_id=? ORDER BY created_at DESC,id LIMIT 100",
+        String.class,u.tenantId(),projectId);
+    return ids.stream().map(scenarioId->scenarioResult(u,scenarioId)).toList();
+  }
+
+  @Transactional(readOnly=true)
+  public List<Map<String,Object>> compareScenarios(AuthenticatedPrincipal u,String projectId,ScenarioCompareInput input) {
+    project(u,projectId,false);
+    if(input.ids().stream().distinct().count()!=input.ids().size())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose each scenario once");
+    String placeholders=String.join(",",Collections.nCopies(input.ids().size(),"?"));
+    var args=new ArrayList<Object>();args.add(u.tenantId());args.add(projectId);args.addAll(input.ids());
+    Long found=db.queryForObject("SELECT count(*) FROM work_scenarios WHERE tenant_id=? AND project_id=? AND id IN ("+placeholders+")",
+        Long.class,args.toArray());
+    if(found==null || found!=input.ids().size()) throw missing();
+    if(db.queryForList("SELECT DISTINCT period_start,period_end FROM work_scenarios WHERE tenant_id=? AND project_id=? AND id IN ("+placeholders+")",
+        args.toArray()).size()!=1)
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Scenarios must use the same planning period");
+    return input.ids().stream().map(scenarioId->scenarioResult(u,scenarioId)).toList();
+  }
+
+  public Map<String,Object> requestScenarioApproval(AuthenticatedPrincipal u,String scenarioId) {
+    var scenario=scenarioResult(u,scenarioId);
+    String projectId=String.valueOf(scenario.get("project_id"));
+    project(u,projectId,true);
+    String approvalId=id();
+    if(db.update("INSERT INTO work_scenario_approvals(id,tenant_id,scenario_id,requested_by,status) VALUES (?,?,?,?,'PENDING') ON CONFLICT (tenant_id,scenario_id) DO NOTHING",
+        approvalId,u.tenantId(),scenarioId,u.id())==0)
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"This scenario already has an approval request");
+    event(u,projectId,null,"SCENARIO_APPROVAL_REQUESTED",Map.of("scenarioId",scenarioId));
+    notifyProjectWriters(u,projectId,scenarioId,"SCENARIO_APPROVAL_REQUESTED");
+    return scenarioResult(u,scenarioId);
+  }
+
+  public Map<String,Object> decideScenarioApproval(AuthenticatedPrincipal u,String scenarioId,ScenarioApprovalInput input) {
+    var scenario=scenarioResult(u,scenarioId);
+    String projectId=String.valueOf(scenario.get("project_id"));
+    project(u,projectId,true);
+    @SuppressWarnings("unchecked") var approval=(Map<String,Object>)scenario.get("approval");
+    if(!"PENDING".equals(approval.get("status")))
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"There is no pending approval request");
+    if(((Number)approval.get("version")).intValue()!=input.expectedVersion())
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"Approval changed; refresh before deciding");
+    if(u.id().equals(approval.get("requested_by")))
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,"A different project editor must decide this request");
+    String reason=input.reason()==null?"":input.reason().trim();
+    if(input.status().equals("REJECTED") && reason.isEmpty())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A rejection reason is required");
+    int changed=db.update("""
+        UPDATE work_scenario_approvals SET status=?,decided_by=?,decided_at=now(),reason=?,version=version+1
+        WHERE tenant_id=? AND scenario_id=? AND status='PENDING' AND version=?
+        """,input.status(),u.id(),reason.isEmpty()?null:reason,u.tenantId(),scenarioId,input.expectedVersion());
+    if(changed==0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Approval changed; refresh before deciding");
+    event(u,projectId,null,"SCENARIO_APPROVAL_DECIDED",Map.of("scenarioId",scenarioId,"status",input.status()));
+    notifyUser(u,projectId,scenarioId,String.valueOf(approval.get("requested_by")),"SCENARIO_APPROVAL_DECIDED");
+    return scenarioResult(u,scenarioId);
+  }
+
+  public Map<String,Object> saveScenarioOutcome(AuthenticatedPrincipal u,String scenarioId,ScenarioOutcomeInput input) {
+    var scenario=scenarioResult(u,scenarioId);
+    String projectId=String.valueOf(scenario.get("project_id"));
+    project(u,projectId,true);
+    @SuppressWarnings("unchecked") var current=(Map<String,Object>)scenario.get("outcome");
+    int version=((Number)current.get("version")).intValue();
+    if(version==0) {
+      if(input.expectedVersion()!=0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Outcome changed; refresh before saving");
+      int inserted=db.update("INSERT INTO work_scenario_outcomes(id,tenant_id,scenario_id,recorded_by,status,actual_hours,note) VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,scenario_id) DO NOTHING",
+          id(),u.tenantId(),scenarioId,u.id(),input.status(),input.actualHours(),input.note().trim());
+      if(inserted==0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Outcome changed; refresh before saving");
+    } else {
+      if(version!=input.expectedVersion()) throw new ResponseStatusException(HttpStatus.CONFLICT,"Outcome changed; refresh before saving");
+      int changed=db.update("""
+          UPDATE work_scenario_outcomes SET recorded_by=?,status=?,actual_hours=?,note=?,recorded_at=now(),version=version+1
+          WHERE tenant_id=? AND scenario_id=? AND version=?
+          """,u.id(),input.status(),input.actualHours(),input.note().trim(),u.tenantId(),scenarioId,input.expectedVersion());
+      if(changed==0) throw new ResponseStatusException(HttpStatus.CONFLICT,"Outcome changed; refresh before saving");
+    }
+    var outcomeEvent=new LinkedHashMap<String,Object>();
+    outcomeEvent.put("scenarioId",scenarioId);outcomeEvent.put("status",input.status());
+    outcomeEvent.put("actualHours",input.actualHours());outcomeEvent.put("note",input.note().trim());
+    event(u,projectId,null,"SCENARIO_OUTCOME_RECORDED",outcomeEvent);
+    return scenarioResult(u,scenarioId);
+  }
+
+  @Transactional(readOnly=true)
+  public List<Map<String,Object>> notifications(AuthenticatedPrincipal u) {
+    return db.queryForList("""
+        SELECT n.id,n.kind,n.resource_id,n.created_at,n.read_at,p.name AS project_name
+        FROM work_notifications n JOIN work_projects p ON p.id=n.project_id AND p.tenant_id=n.tenant_id
+        WHERE n.tenant_id=? AND n.recipient_id=? AND
+        """+VISIBLE+" ORDER BY n.created_at DESC,n.id LIMIT 50",
+        u.tenantId(),u.id(),u.tenantId(),u.id(),u.id());
+  }
+
+  public Map<String,Object> markNotificationRead(AuthenticatedPrincipal u,String notificationId) {
+    int changed=db.update("""
+        UPDATE work_notifications n SET read_at=COALESCE(n.read_at,now()) FROM work_projects p
+        WHERE n.id=? AND n.tenant_id=? AND n.recipient_id=? AND p.id=n.project_id AND p.tenant_id=n.tenant_id AND
+        """+VISIBLE,
+        notificationId,u.tenantId(),u.id(),u.tenantId(),u.id(),u.id());
+    if(changed==0) throw missing();
+    return Map.of("ok",true);
+  }
+
+  private void notifyProjectWriters(AuthenticatedPrincipal actor,String projectId,String scenarioId,String kind) {
+    var users=db.queryForList("""
+        SELECT owner_id AS user_id FROM work_projects WHERE tenant_id=? AND id=?
+        UNION SELECT user_id FROM work_project_grants WHERE tenant_id=? AND project_id=? AND permission='WRITE' AND revoked_at IS NULL
+        UNION SELECT b.user_id FROM org_role_bindings b JOIN org_role_permissions rp ON rp.role_id=b.role_id AND rp.tenant_id=b.tenant_id
+          JOIN work_projects p ON p.tenant_id=b.tenant_id AND p.id=?
+          WHERE b.tenant_id=? AND b.revoked_at IS NULL AND rp.permission='PROJECT_WRITE' AND NOT p.restricted AND
+            (b.scope='COMPANY' OR (b.scope='TEAM' AND b.team_id=p.team_id) OR
+             (b.scope='DEPARTMENT' AND EXISTS (SELECT 1 FROM org_teams t WHERE t.tenant_id=p.tenant_id AND t.id=p.team_id AND t.department_id=b.department_id)))
+        """,String.class,actor.tenantId(),projectId,actor.tenantId(),projectId,projectId,actor.tenantId());
+    for(String recipient:users) if(!recipient.equals(actor.id())) notifyUser(actor,projectId,scenarioId,recipient,kind);
+  }
+
+  private void notifyUser(AuthenticatedPrincipal actor,String projectId,String scenarioId,String recipient,String kind) {
+    db.update("INSERT INTO work_notifications(id,tenant_id,recipient_id,project_id,resource_id,kind) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+        id(),actor.tenantId(),recipient,projectId,scenarioId,kind);
+  }
+
   public Map<String,Object> scenarioResult(AuthenticatedPrincipal u,String scenarioId) {
     var rows=db.queryForList("SELECT s.* FROM work_scenarios s JOIN work_projects p ON p.id=s.project_id AND p.tenant_id=s.tenant_id WHERE "+
         VISIBLE+" AND s.id=?",u.tenantId(),u.id(),u.id(),scenarioId);
@@ -280,9 +392,25 @@ public class WorkService {
     result.put("remaining_assumed_hours",complete?available.subtract(baseline).subtract(proposed):null);
     result.put("method","Known unfinished project effort due by period end, including overdue work, plus proposed effort versus assumed available hours. Undated tasks or missing estimates prevent a capacity conclusion.");
     result.put("limitations","What-if estimate, not a forecast or employee utilization measure. Availability is user-declared for this project and period; other projects, skills, sequencing and leave are not modeled.");
+    var approvals=db.queryForList("SELECT status,requested_by,requested_at,decided_by,decided_at,reason,version FROM work_scenario_approvals WHERE tenant_id=? AND scenario_id=?",
+        u.tenantId(),scenarioId);
+    result.put("approval",approvals.isEmpty()?Map.of("status","NONE","version",0):approvals.getFirst());
+    var outcomes=db.queryForList("SELECT status,actual_hours,note,recorded_at,version,recorded_by FROM work_scenario_outcomes WHERE tenant_id=? AND scenario_id=?",
+        u.tenantId(),scenarioId);
+    result.put("outcome",outcomes.isEmpty()?Map.of("status","NONE","version",0):outcomes.getFirst());
     result.put("evidence",db.queryForList("SELECT task_id,task_version,remaining_hours,due_date FROM work_scenario_evidence WHERE tenant_id=? AND scenario_id=? ORDER BY task_id",
         u.tenantId(),scenarioId));
     return result;
+  }
+
+  public Map<String,Object> organizationalScope(AuthenticatedPrincipal u,String projectId,String teamId,boolean restricted) {
+    var p=project(u,projectId,true);
+    if(!u.id().equals(p.get("owner_id"))) throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Only the project owner can change its audience");
+    if(teamId!=null && db.queryForObject("SELECT count(*) FROM org_teams WHERE tenant_id=? AND id=?",Long.class,u.tenantId(),teamId)==0)
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Team not found");
+    db.update("UPDATE work_projects SET team_id=?,restricted=? WHERE tenant_id=? AND id=?",teamId,restricted,u.tenantId(),projectId);
+    event(u,projectId,null,"PROJECT_AUDIENCE_CHANGED",Map.of("teamId",teamId==null?"":teamId,"restricted",restricted));
+    return project(u,projectId,false);
   }
 
   private void event(AuthenticatedPrincipal u,String projectId,String taskId,String kind,Object payload) {
