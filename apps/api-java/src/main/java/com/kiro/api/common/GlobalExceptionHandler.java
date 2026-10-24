@@ -50,6 +50,11 @@ public class GlobalExceptionHandler {
     return error(s, s.getReasonPhrase(), e.getReason() != null ? e.getReason() : s.getReasonPhrase(), req);
   }
 
+  @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+  public ResponseEntity<ApiError> constraint(Exception e,HttpServletRequest req) {
+    return error(HttpStatus.CONFLICT,"Conflict","Record conflicts with an existing record or an organization constraint",req);
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiError> unhandled(Exception e, HttpServletRequest req) {
     // Never leak stack traces or internals to the client.
