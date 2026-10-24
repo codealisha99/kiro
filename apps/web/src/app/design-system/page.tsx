@@ -35,6 +35,7 @@ export default function DesignSystemPage() {
   const [saved, setSaved] = useState(false);
   const [query, setQuery] = useState("");
   const [asked, setAsked] = useState(false);
+  const [dialogSaving, setDialogSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <div className="system" data-theme={dark ? "dark" : "light"}>
@@ -290,22 +291,32 @@ export default function DesignSystemPage() {
               </div>
               <Dialog
                 open={dialogOpen}
+                closeDisabled={dialogSaving}
                 title="A focused task"
                 onClose={() => setDialogOpen(false)}
               >
                 <div className="form">
                   <p>
                     Document uploads and source details open when needed,
-                    keeping the workspace clear.
+                    keeping the workspace clear. The shared upload control accepts PDF, DOCX, XLSX, CSV, Markdown, and text up to 10 MB.
                   </p>
-                  <FileUpload file={file} onChange={setFile} />
+                  <FileUpload file={file} onChange={setFile} disabled={dialogSaving} />
                   <Field label="Document title">
                     {(field) => (
-                      <Input {...field} placeholder="Customer refund policy" />
+                      <Input {...field} placeholder="Customer refund policy" disabled={dialogSaving} />
                     )}
                   </Field>
+                  <StatefulButton loading={dialogSaving} variant="secondary"
+                    onClick={() => {
+                      setDialogSaving(true);
+                      window.setTimeout(() => setDialogSaving(false), 1200);
+                    }}>
+                    {dialogSaving ? "Saving preview…" : "Preview pending save"}
+                  </StatefulButton>
+                  <p className="muted">Close, Escape, and backdrop dismissal pause while a save is pending. This is a component preview.</p>
                   <Button
                     variant="primary"
+                    disabled={dialogSaving}
                     onClick={() => setDialogOpen(false)}
                   >
                     Done

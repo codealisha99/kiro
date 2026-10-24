@@ -24,6 +24,8 @@ export function FileUpload({
     maxSize: 10 * 1024 * 1024,
     accept: {
       "application/pdf": [".pdf"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
       "text/markdown": [".md"],
       "text/plain": [".txt"],
       "text/csv": [".csv"],
@@ -35,7 +37,7 @@ export function FileUpload({
             errors.some(({ code }) => code === "file-too-large"),
           )
             ? "Choose a document smaller than 10 MB."
-            : "Choose one PDF, Markdown, text, or CSV document.",
+            : "Choose one PDF, DOCX, XLSX, Markdown, text, or CSV document.",
         );
         return;
       }
@@ -78,7 +80,7 @@ export function FileUpload({
               ? "Choose a different document"
               : "Drop a document, or browse"}
         </strong>
-        <span id={`${id}-hint`}>PDF, Markdown, text, or CSV · up to 10 MB</span>
+        <span id={`${id}-hint`}>PDF, DOCX, XLSX, Markdown, text, or CSV · up to 10 MB</span>
       </div>
       {file && (
         <motion.div

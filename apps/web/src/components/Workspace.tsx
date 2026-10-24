@@ -16,6 +16,7 @@ import {
   Alert,
   Button,
   Dialog,
+  Input,
   StatefulButton,
   Textarea,
 } from "@/components/ui";
@@ -28,8 +29,12 @@ import {
 } from "@/lib/api";
 import { AccountProfile } from "./AccountProfile";
 import AuthScreen from "./AuthScreen";
+import DocumentEditor from "./DocumentEditor";
+import type { DocumentEditorHandle } from "./DocumentEditor";
+import DocumentActions from "./DocumentActions";
 import EvidencePanel from "./EvidencePanel";
 import KnowledgeLibrary from "./KnowledgeLibrary";
+import WorkDashboard from "./WorkDashboard";
 import { KiroMark, WorkspaceIcon } from "./WorkspaceIcon";
 import "./workspace.css";
 
@@ -78,11 +83,17 @@ export default function Workspace({
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [success, setSuccess] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"ask" | "library">("ask");
+  const [view, setView] = useState<"ask" | "library" | "work">("ask");
   const [railOpen, setRailOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingDocument, setEditingDocument] = useState(false);
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const documentEditorRef = useRef<DocumentEditorHandle>(null);
+  const documentVersionRef = useRef<number | undefined>(undefined);
   const [documentOpen, setDocumentOpen] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDetail | null>(null);
   const [activeCite, setActiveCite] = useState<CitationSource | null>(null);
@@ -94,6 +105,7 @@ export default function Workspace({
   const railRef = useRef<HTMLElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const activeDocumentId = useRef<string | null>(null);
   const documentRequestRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -141,12 +153,16 @@ export default function Workspace({
       setActiveConversationId(null);
       setEmbedStatus(null);
       setDocumentOpen(false);
+      setEditingDocument(false);
+      setDocumentBusy(false);
       setOpenDoc(null);
       setActiveCite(null);
       documentRequestRef.current += 1;
       setRailOpen(false);
       setFeedback({});
       setInput("");
+      setConversationSearch("");
+      setSuccess(null);
       setNotice(null);
       setView("ask");
     };
@@ -160,9 +176,10 @@ export default function Workspace({
   useEffect(() => {
     if (!indexing) return;
     const timer = window.setInterval(() => {
+      const session = getToken();
       void api
         .embedStatus()
-        .then(setEmbedStatus)
+        .then((status) => { if (getToken() === session) setEmbedStatus(status); })
         .catch(() => undefined);
     }, 10_000);
     return () => window.clearInterval(timer);
@@ -184,7 +201,7 @@ export default function Workspace({
     const previous = document.activeElement as HTMLElement | null;
     const controls = () =>
       Array.from(
-        panel.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]"),
+        panel.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled)"),
       ).filter((element) => element.getClientRects().length > 0);
     controls()[0]?.focus();
     const handleKey = (event: KeyboardEvent) => {
@@ -217,15 +234,18 @@ export default function Workspace({
   }, [railOpen]);
 
   const openDocument = useCallback(
-    async (id: string, cite?: CitationSource) => {
+    async (id: string, cite?: CitationSource, version = cite?.version) => {
       const request = ++documentRequestRef.current;
+      activeDocumentId.current = id;
+      documentVersionRef.current = version;
+      setEditingDocument(false);
       setDocumentOpen(true);
       setDocLoading(true);
       setDocError(null);
       setOpenDoc(null);
       setActiveCite(cite ?? null);
       try {
-        const detail = await api.document(id);
+        const detail = version === undefined ? await api.document(id) : await api.documentVersion(id, version);
         if (request === documentRequestRef.current) setOpenDoc(detail);
       } catch (err) {
         if (request === documentRequestRef.current)
@@ -371,7 +391,14 @@ export default function Workspace({
     setActiveConversationId(null);
     setRailOpen(false);
     setDocumentOpen(false);
+    setEditingDocument(false);
+    setDocumentBusy(false);
     setNotice(null);
+    setSuccess(null);
+    setConversationSearch("");
+    documentRequestRef.current += 1;
+    setOpenDoc(null);
+    setActiveCite(null);
     setView("ask");
     setDocuments([]);
     setSources([]);
@@ -381,11 +408,14 @@ export default function Workspace({
     setFeedback({});
   }
   async function rate(requestId: string, helpful: boolean) {
+    const session = getToken();
     setFeedback((prev) => ({ ...prev, [requestId]: "pending" }));
     try {
       await api.feedback({ requestId, helpful });
+      if (getToken() !== session) return;
       setFeedback((prev) => ({ ...prev, [requestId]: "saved" }));
     } catch {
+      if (getToken() !== session) return;
       setFeedback((prev) => {
         const next = { ...prev };
         delete next[requestId];
@@ -414,6 +444,9 @@ export default function Workspace({
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     )
     .slice(0, 3);
+  const matchingConversations = conversations.filter((conversation) =>
+    (conversation.title ?? "Untitled question").toLowerCase().includes(conversationSearch.trim().toLowerCase()),
+  );
   const currentTitle = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   )?.title;
@@ -483,13 +516,26 @@ export default function Workspace({
             <WorkspaceIcon name="book" />
             Library<span className="nav-count">{documents.length || ""}</span>
           </button>
+          <button className={`nav-item ${view === "work" ? "selected" : ""}`}
+            aria-current={view === "work" ? "page" : undefined}
+            onClick={() => { setView("work"); setRailOpen(false); }}>
+            <WorkspaceIcon name="book" />Work &amp; insights
+          </button>
         </nav>
         <div className="workspace-recents">
           <h2>Recent conversations</h2>
+          {conversations.length > 0 && (
+            <div className="conversation-search">
+              <Input type="search" aria-label="Search conversations" placeholder="Find a conversation…" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} />
+            </div>
+          )}
+          {conversations.length > 0 && matchingConversations.length === 0 && (
+            <p role="status">No matching conversations. Try another search.</p>
+          )}
           {conversations.length === 0 ? (
             <p>A little clarity starts with a question.</p>
           ) : (
-            conversations.map((conversation) => (
+            matchingConversations.map((conversation) => (
               <button
                 key={conversation.id}
                 className={
@@ -542,7 +588,7 @@ export default function Workspace({
               Workspace <span aria-hidden="true">/</span>
             </span>
             <span>
-              {view === "library"
+              {view === "work" ? "Work & insights" : view === "library"
                 ? "Knowledge library"
                 : currentTitle || "Ask Kiro"}
             </span>
@@ -554,6 +600,11 @@ export default function Workspace({
             </span>
           </button>
         </header>
+        {success && (
+          <div className="workspace-notice">
+            <Alert tone="success">{success}<Button variant="secondary" size="small" onClick={() => setSuccess(null)}>Dismiss</Button></Alert>
+          </div>
+        )}
         {notice && (
           <div className="workspace-notice">
             <Alert tone="danger">
@@ -577,12 +628,12 @@ export default function Workspace({
                 : "Opening your knowledge desk…"}
             </p>
             {notice && (
-              <Button variant="secondary" onClick={() => void load()}>
+              <Button variant="secondary" onClick={() => { setNotice(null); void load(); }}>
                 Try again
               </Button>
             )}
           </div>
-        ) : view === "library" ? (
+        ) : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
           <KnowledgeLibrary
             documents={documents}
             sources={sources}
@@ -707,7 +758,7 @@ export default function Workspace({
                                       )
                                     }
                                   >
-                                    <span>{i + 1}</span>
+                                    <span>{source.citationIndex ?? i + 1}</span>
                                     {source.title}
                                     <WorkspaceIcon
                                       name="chevron"
@@ -875,18 +926,60 @@ export default function Workspace({
       </main>
       <Dialog
         open={documentOpen}
-        onClose={() => setDocumentOpen(false)}
-        title={activeCite ? "Answer source" : "Document"}
+        closeDisabled={documentBusy}
+        onClose={() => {
+          if (documentBusy) return;
+          if (editingDocument) documentEditorRef.current?.requestClose();
+          else {
+            documentRequestRef.current += 1;
+            setDocumentOpen(false);
+          }
+        }}
+        title={editingDocument ? "Edit document" : activeCite ? "Answer source" : "Document"}
         className="document-dialog"
       >
         {docError ? (
-          <Alert tone="danger">{docError}</Alert>
+          <Alert tone="danger">{docError}
+            <Button variant="secondary" onClick={() => { if (activeDocumentId.current) void openDocument(activeDocumentId.current, activeCite ?? undefined, documentVersionRef.current); }}>Try again</Button>
+          </Alert>
+        ) : editingDocument && openDoc ? (
+          <DocumentEditor ref={documentEditorRef} key={`${openDoc.id}-${openDoc.selectedVersion}`}
+            document={openDoc} onBusyChange={setDocumentBusy}
+            onCancel={() => setEditingDocument(false)}
+            onSaved={(detail) => {
+              setOpenDoc(detail);
+              setEditingDocument(false);
+              setActiveCite(null);
+              documentVersionRef.current = undefined;
+              setDocuments((docs) => docs.map((doc) => doc.id === detail.id ? detail : doc));
+              setSuccess(`Version ${detail.selectedVersion} saved. New answers will use this revision.`);
+              void load();
+            }} />
         ) : (
+          <>
           <EvidencePanel
             document={openDoc}
             citation={activeCite}
             loading={docLoading}
           />
+          {openDoc && !docLoading && (
+            <DocumentActions key={`${openDoc.id}-${openDoc.selectedVersion}`} document={openDoc} disabled={busy || documentBusy}
+              onEdit={() => setEditingDocument(true)} onBusyChange={setDocumentBusy}
+              onOpenVersion={(version) => void openDocument(openDoc.id, activeCite?.version === version ? activeCite : undefined, version)}
+              onDeleted={(id) => {
+              documentRequestRef.current += 1;
+              setDocuments((docs) => docs.filter((doc) => doc.id !== id));
+              setOpenDoc(null);
+              setActiveCite(null);
+              setDocumentOpen(false);
+              setMessages([]);
+              setActiveConversationId(null);
+              setView("library");
+              setSuccess("Document removed from the workspace library.");
+              void load();
+            }} />
+          )}
+          </>
         )}
       </Dialog>
     </div>
@@ -900,7 +993,7 @@ function renderAnswer(
 ) {
   return text.split(/(\[\d+\])/g).map((part, index) => {
     const match = part.match(/^\[(\d+)\]$/);
-    const source = match ? sources?.[Number(match[1]) - 1] : undefined;
+    const source = match ? sources?.find((source, index) => (source.citationIndex ?? index + 1) === Number(match[1])) : undefined;
     return source ? (
       <button
         key={index}
