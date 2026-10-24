@@ -14,7 +14,8 @@ public class PlanningController {
  @PostMapping("/initiatives") public Object initiative(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Initiative b){return s.initiative(u,projectId,b);}
  @PostMapping("/milestones") public Object milestone(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Milestone b){return s.milestone(u,projectId,b);}
  @PutMapping("/tasks/{id}") public Object task(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@PathVariable String id,@Valid @RequestBody TaskPlan b){return s.taskPlan(u,projectId,id,b);}
- @PostMapping("/availability") public Object availability(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Availability b){return s.availability(u,projectId,b);}
+  @PostMapping("/availability") public Object availability(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Availability b){return s.availability(u,projectId,b);}
+  @PostMapping("/commitments") public Object commitment(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Commitment b){return s.commitment(u,projectId,b);}
  @PostMapping("/skills") public Object skill(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody Skill b){return s.skill(u,projectId,b);}
  @PostMapping("/time") public Object time(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@Valid @RequestBody TimeEntry b){return s.time(u,projectId,b);}
  @DeleteMapping("/{kind}/{id}") public Object revoke(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String projectId,@PathVariable String kind,@PathVariable String id){return s.revoke(u,projectId,kind,id);}

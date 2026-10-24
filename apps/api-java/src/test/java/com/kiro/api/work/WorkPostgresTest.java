@@ -43,7 +43,7 @@ class WorkPostgresTest {
   }
 
   @BeforeEach void reset() {
-    db.execute("TRUNCATE work_insights,work_events,work_dependencies,work_tasks,work_project_grants,work_projects CASCADE");
+    db.execute("TRUNCATE work_insights,work_events,work_dependencies,work_tasks,work_project_grants,work_projects,work_commitments CASCADE");
   }
   String project(String name) { return tx.execute(t -> (String)work.createProject(owner,new ProjectInput(name)).get("id")); }
   Map<String,Object> task(String p,String title,String status,LocalDate due,BigDecimal hours) {
@@ -250,6 +250,44 @@ class WorkPostgresTest {
   }
 
   PlanningService planning() {return new PlanningService(db,work,new ObjectMapper().findAndRegisterModules());}
+  @Test void crossProjectCommitmentsStayScopedAndNeverDiscloseHiddenWork() {
+    var plan=planning();
+    String home=project("Home"),laboratory=project("Laboratory");
+    String hidden=tx.execute(t->(String)work.createProject(reader,new ProjectInput("Hidden")).get("id"));
+    var borrowed=new PlanningService.Commitment(reader.id(),LocalDate.now(),LocalDate.now().plusDays(7),
+        new BigDecimal("10"),"Borrowed hours","Shell team covers scripting",laboratory);
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.commitment(reader,home,borrowed)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.commitment(owner,home,
+        new PlanningService.Commitment(reader.id(),LocalDate.now(),LocalDate.now().plusDays(7),BigDecimal.TEN,"Unreachable","Assignee lacks project access yet",null))));
+    tx.execute(t->work.grant(owner,home,new GrantInput(reader.id(),"READ"),false));
+    String id=(String)((Map<?,?>)tx.execute(t->plan.commitment(owner,home,borrowed))).get("id");
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.commitment(owner,home,
+        new PlanningService.Commitment(reader.id(),LocalDate.now(),LocalDate.now().plusDays(7),BigDecimal.TEN,"Second placement","Overlaps the first window",null))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.commitment(owner,home,
+        new PlanningService.Commitment(reader.id(),LocalDate.now(),LocalDate.now().plusDays(7),BigDecimal.TEN,"Concealed source","Recorder cannot read it",hidden))));
+    assertEquals(1,((List<?>)tx.execute(t->plan.list(owner,home)).get("commitments")).size());
+    assertTrue(((List<?>)tx.execute(t->plan.list(reader,home)).get("commitments")).size()==1);
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.list(reader,laboratory)));
+    tx.execute(t->work.grant(owner,laboratory,new GrantInput(reader.id(),"READ"),false));
+    String sid=(String)((Map<?,?>)tx.execute(t->plan.commitment(owner,laboratory,
+        new PlanningService.Commitment(reader.id(),LocalDate.now(),LocalDate.now().plusDays(3),new BigDecimal("6"),"Lab shift","Committed from the other workstream",null)))).get("id");
+    tx.execute(t->work.saveTask(owner,home,null,new TaskInput("Borrowed feature","TODO",reader.id(),new BigDecimal("8"),LocalDate.now().plusDays(3),null)));
+    var ownerRows=((List<?>)tx.execute(t->plan.capacity(owner,home,LocalDate.now(),LocalDate.now().plusDays(7))).get("people"));
+    Map<?,?> peer=(Map<?,?>)ownerRows.getFirst();
+    assertEquals(0,new BigDecimal("10").compareTo((BigDecimal)peer.get("committed_hours")));
+    assertEquals(0,new BigDecimal("6").compareTo((BigDecimal)peer.get("visible_cross_hours")));
+    assertEquals(0,BigDecimal.ZERO.compareTo((BigDecimal)peer.get("other_committed_hours")));
+    assertEquals(0,new BigDecimal("80").compareTo((BigDecimal)peer.get("allocation_load_percent")));
+    tx.execute(t->work.grant(owner,home,new GrantInput(admin.id(),"READ"),false));
+    var adminRows=((List<?>)tx.execute(t->plan.capacity(admin,home,LocalDate.now(),LocalDate.now().plusDays(7))).get("people"));
+    Map<?,?> guarded=(Map<?,?>)adminRows.getFirst();
+    assertEquals(0,new BigDecimal("6").compareTo((BigDecimal)guarded.get("other_committed_hours")));
+    assertEquals(0,BigDecimal.ZERO.compareTo((BigDecimal)guarded.get("visible_cross_hours")));
+    tx.execute(t->plan.revoke(owner,home,"commitment",id));
+    assertTrue(((List<?>)tx.execute(t->plan.list(owner,home)).get("commitments")).isEmpty());
+    assertEquals(3L,db.queryForObject("SELECT count(*) FROM work_events WHERE kind='COMMITMENT_DECLARED' OR kind='PLANNING_RECORD_REVOKED'",Long.class));
+    assertEquals(1L,db.queryForObject("SELECT count(*) FROM work_commitments WHERE revoked_at IS NOT NULL",Long.class));
+  }
   @Test void planningLinksAreScopedAndSubtaskCyclesAreRejected() {
     var plan=planning();String p=project("Planning"),other=project("Other");
     String a=(String)task(p,"Parent","TODO",LocalDate.now(),BigDecimal.ONE).get("id");

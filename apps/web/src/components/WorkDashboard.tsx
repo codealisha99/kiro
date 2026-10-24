@@ -169,7 +169,7 @@ export default function WorkDashboard() {
           <Button variant="secondary" disabled={busy} onClick={() => void action(async () => setHistory(await workApi.history(detail.project.id)))}>Change history</Button>
           {detail.project.can_write && <Button disabled={busy} onClick={() => editTask()}>Add task</Button>}
         </div></div>
-      <details><summary>Planning, goals and capacity</summary><ProjectPlanning key={detail.project.id} detail={detail} /></details>
+      <details><summary>Planning, goals and capacity</summary><ProjectPlanning key={detail.project.id} detail={detail} projects={projects} /></details>
       <ProjectSources key={detail.project.id} projectId={detail.project.id} canWrite={!!detail.project.can_write} />
       {!detail.tasks.length && <p>No tasks on this page.</p>}
       <ul className="work-list">{detail.tasks.map(t => <li key={t.id}>
