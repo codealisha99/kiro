@@ -44,6 +44,10 @@ export interface DocumentChunkPreview {
 }
 
 export interface DocumentDetail extends DocumentListItem {
+  canDelete?: boolean;
+  canEdit?: boolean;
+  selectedVersion?: number | null;
+  versionCreatedAt?: Date | null;
   versions: DocumentVersionDto[];
   content: string;
   filename: string | null;
@@ -123,6 +127,7 @@ export interface BrainQueryRequest {
 export type AnswerStatus = "answered" | "unknown" | "ambiguous" | "partial" | "error";
 
 export interface CitationSource {
+  citationIndex?: number;
   documentId: string;
   chunkId?: string;
   title: string;

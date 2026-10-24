@@ -1,3 +1,4 @@
+import { visibleDocumentsWhere } from "../common/document-visibility";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { AuthenticatedUser } from "../auth/jwt-payload.interface";
 import { PrismaService } from "../prisma/prisma.service";
@@ -61,6 +62,17 @@ export class ConversationsService {
       throw new NotFoundException("Conversation not found");
     }
 
+    const evidenceIds = conversation.requests.flatMap((r) =>
+      r.responses[0]?.evidence.map((e) => e.documentId) ?? [],
+    );
+    const visibleDocuments = evidenceIds.length
+      ? await this.prisma.document.findMany({
+          where: { ...visibleDocumentsWhere(user), id: { in: [...new Set(evidenceIds)] } },
+          select: { id: true },
+        })
+      : [];
+    const visibleIds = new Set(visibleDocuments.map((document) => document.id));
+
     const chunkIds = conversation.requests.flatMap((r) =>
       r.responses[0]?.evidence.map((e) => e.chunkId).filter((id): id is string => !!id) ?? [],
     );
@@ -78,7 +90,9 @@ export class ConversationsService {
       updatedAt: conversation.updatedAt,
       messages: conversation.requests.map((r) => {
         const response = r.responses[0];
-        const sources: CitationSource[] = (response?.evidence ?? []).map((e) => ({
+        const unavailableEvidence = response?.evidence.some((e) => !visibleIds.has(e.documentId)) ?? false;
+        const sources: CitationSource[] = (unavailableEvidence ? [] : response?.evidence ?? []).map((e) => ({
+          citationIndex: e.citationIndex ?? undefined,
           documentId: e.documentId,
           chunkId: e.chunkId ?? undefined,
           title: e.document.title,
@@ -92,8 +106,10 @@ export class ConversationsService {
         return {
           id: r.id,
           query: r.query,
-          answer: response?.answer ?? "",
-          status: (response?.status as AnswerStatus) ?? "answered",
+          answer: unavailableEvidence
+            ? "This answer is no longer available because a supporting document was removed or your access changed. Ask again using your current sources."
+            : response?.answer ?? "",
+          status: unavailableEvidence ? "unknown" : (response?.status as AnswerStatus) ?? "error",
           createdAt: r.createdAt,
           sources,
         };

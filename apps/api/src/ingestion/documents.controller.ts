@@ -5,6 +5,8 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
+  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -17,7 +19,7 @@ import { ThrottleGuard } from "../common/throttle.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/jwt-payload.interface";
 import { IngestionService } from "./ingestion.service";
-import { IngestDocumentDto, RevokeAclDto } from "./dto/ingestion.dto";
+import { IngestDocumentDto, RevokeAclDto, UpdateDocumentDto } from "./dto/ingestion.dto";
 
 @Controller("documents")
 @UseGuards(JwtAuthGuard)
@@ -64,6 +66,18 @@ export class DocumentsController {
   @Get(":id/versions")
   versions(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
     return this.ingestion.listVersions(user, id);
+  }
+
+  @Get(":id/versions/:version")
+  version(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string,
+    @Param("version", ParseIntPipe) version: number) {
+    return this.ingestion.getDocument(user, id, version);
+  }
+
+  @Patch(":id")
+  update(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string,
+    @Body() body: UpdateDocumentDto) {
+    return this.ingestion.updateDocument(user, id, body);
   }
 
   @Get(":id")
