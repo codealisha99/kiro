@@ -68,4 +68,26 @@ class ParserServiceTest {
     var doc = parser.parse(bytes("ab\u0000cd"), "x.txt", "text/plain", null);
     assertEquals("abcd", doc.content());
   }
+  @Test
+  void corruptedSpreadsheetIsRejectedInsteadOfIndexingBinaryGarbage() {
+    assertThrows(ResponseStatusException.class,
+        () -> parser.parse(bytes("broken binary workbook"), "sheet.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", null));
+  }
+
+  @Test
+  void extractsRealWordAndSpreadsheetUploads() throws Exception {
+    try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+         var output = new java.io.ByteArrayOutputStream()) {
+      workbook.createSheet("Policies").createRow(0).createCell(0).setCellValue("Travel expenses 14 days");
+      workbook.write(output);
+      assertTrue(parser.parse(output.toByteArray(), "policy.xlsx", "", null).content().contains("14 days"));
+    }
+    try (var document = new org.apache.poi.xwpf.usermodel.XWPFDocument();
+         var output = new java.io.ByteArrayOutputStream()) {
+      document.createParagraph().createRun().setText("Travel expenses 14 days");
+      document.write(output);
+      assertTrue(parser.parse(output.toByteArray(), "policy.docx", "", null).content().contains("14 days"));
+    }
+  }
+
 }

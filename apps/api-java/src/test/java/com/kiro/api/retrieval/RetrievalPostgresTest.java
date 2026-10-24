@@ -48,6 +48,8 @@ class RetrievalPostgresTest {
       jdbc.update("INSERT INTO document_chunks (id, \"documentVersionId\", content, embedding) VALUES (?, ?, 'Refund policy allows returns within 30 days', ?::vector)",
           id, id, RetrievalService.toVectorLiteral(vector));
     }
+    jdbc.execute("INSERT INTO document_versions (id, \"documentId\", version, \"contentHash\", \"approvalStatus\") VALUES ('public-old', 'public', 0, 'old', 'APPROVED')");
+    jdbc.update("INSERT INTO document_chunks (id, \"documentVersionId\", content, embedding) VALUES ('public-old', 'public-old', 'Refund policy obsolete-only', ?::vector)", RetrievalService.toVectorLiteral(vector));
     jdbc.execute("INSERT INTO document_acl (id, \"documentId\", \"principalType\", \"principalId\") VALUES ('user', 'user-grant', 'USER', 'reader'), ('role', 'role-grant', 'ROLE', 'EMPLOYEE')");
   }
 
@@ -67,11 +69,17 @@ class RetrievalPostgresTest {
     assertTrue(retrieval.search(outsider, "refund policy", 5).isEmpty());
   }
 
+  @Test
+  void obsoleteTextCannotSupplyNewAnswers() {
+    assertTrue(retrieval.searchKeyword(reader(), "obsolete-only").isEmpty());
+  }
+
   private static AuthenticatedPrincipal reader() {
     return new AuthenticatedPrincipal("reader", "reader@example.com", "tenant", "employee");
   }
 
   private static void assertVisible(List<RetrievedChunk> chunks) {
+    assertTrue(chunks.stream().allMatch(chunk -> chunk.version() == 1));
     assertEquals(java.util.Set.of("public", "owned", "user-grant", "role-grant"),
         chunks.stream().map(RetrievedChunk::documentId).collect(java.util.stream.Collectors.toSet()));
   }

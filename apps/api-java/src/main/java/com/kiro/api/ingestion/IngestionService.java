@@ -62,8 +62,9 @@ public class IngestionService {
 
   public List<Map<String, Object>> listSources(AuthenticatedPrincipal user) {
     List<Map<String, Object>> out = new ArrayList<>();
+    List<Document> visible = documents.findVisible(user.tenantId(), user.id(), user.roleUpper());
     for (var s : sources.findByTenantIdAndDeletedFalseOrderByCreatedAtAsc(user.tenantId())) {
-      long count = documents.findVisible(user.tenantId(), user.id(), user.roleUpper()).stream()
+      long count = visible.stream()
           .filter(d -> d.getSourceId().equals(s.getId())).count();
       var m = new java.util.LinkedHashMap<String, Object>();
       m.put("id", s.getId());
@@ -131,10 +132,17 @@ public class IngestionService {
   }
 
   public Map<String, Object> getDocument(AuthenticatedPrincipal user, String id) {
+    return getDocument(user, id, null);
+  }
+
+  public Map<String, Object> getDocument(AuthenticatedPrincipal user, String id, Integer requestedVersion) {
     Document doc = documents.findVisibleById(user.tenantId(), id, user.id(), user.roleUpper())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
     List<DocumentVersion> vers = versions.findByDocumentIdOrderByVersionDesc(doc.getId());
-    DocumentVersion latest = vers.isEmpty() ? null : vers.get(0);
+    DocumentVersion latest = requestedVersion == null
+        ? vers.isEmpty() ? null : vers.get(0)
+        : vers.stream().filter(v -> v.getVersion() == requestedVersion).findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document version not found"));
     List<DocumentChunk> chunkRows = latest == null
         ? List.of()
         : chunks.findByDocumentVersionId(latest.getId());
@@ -178,7 +186,62 @@ public class IngestionService {
     out.put("filename", latest == null ? null : latest.getFilename());
     out.put("chunks", chunkDtos);
     out.put("versions", versionDtos);
+    boolean canManage = canDeleteDocument(user, doc);
+    out.put("canDelete", canManage);
+    out.put("canEdit", canManage);
+    out.put("selectedVersion", latest == null ? null : latest.getVersion());
+    out.put("versionCreatedAt", latest == null ? null : latest.getCreatedAt().toString());
     return out;
+  }
+
+  @Transactional
+  public Map<String, Object> updateDocument(AuthenticatedPrincipal user, String id,
+      String title, String content, int expectedVersion) {
+    Document doc = documents.findForUpdate(id, user.tenantId())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+    if (!canDeleteDocument(user, doc)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found");
+    }
+    if (title == null || title.isBlank() || title.length() > 200
+        || content == null || content.isBlank() || content.length() > 400_000) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Use a title of up to 200 characters and document text of up to 400,000 characters.");
+    }
+    DocumentVersion previous = versions.findFirstByDocumentIdOrderByVersionDesc(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "This document has no version to edit"));
+    if (expectedVersion != previous.getVersion()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "A newer version was saved. Your changes have not been applied. Open the current version before editing again.");
+    }
+    String nextTitle = title.trim();
+    String nextContent = content.trim();
+    String hash = sha256(nextContent);
+    if (nextTitle.equals(doc.getTitle()) && hash.equals(previous.getContentHash())) {
+      return getDocument(user, id);
+    }
+    var raw = chunker.chunk(nextContent);
+    if (raw.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document produced no searchable text");
+    }
+    DocumentVersion revision = new DocumentVersion();
+    revision.setDocumentId(id);
+    revision.setVersion(previous.getVersion() + 1);
+    revision.setContentHash(hash);
+    revision.setContent(nextContent);
+    revision.setApprovalStatus("APPROVED");
+    versions.save(revision);
+    for (var entry : raw) {
+      DocumentChunk chunk = new DocumentChunk();
+      chunk.setDocumentVersionId(revision.getId());
+      chunk.setContent(entry.content());
+      chunk.setMetadata(Map.of("index", entry.index(), "source", "edit"));
+      chunks.save(chunk);
+    }
+    doc.setTitle(nextTitle);
+    doc.setUpdatedAt(Instant.now());
+    documents.save(doc);
+    queue.enqueueEmbedVersion(revision.getId());
+    return getDocument(user, id);
   }
 
   public List<Map<String, Object>> listVersions(AuthenticatedPrincipal user, String id) {
@@ -198,18 +261,18 @@ public class IngestionService {
     return out;
   }
 
+  private boolean canDeleteDocument(AuthenticatedPrincipal user, Document doc) {
+    return user.id().equals(doc.getOwnerId()) || "admin".equalsIgnoreCase(user.role())
+        || acls.findFirstByDocumentIdAndPrincipalTypeAndPrincipalIdAndPermission(
+            doc.getId(), "USER", user.id(), "ADMIN").isPresent();
+  }
+
   @Transactional
   public Map<String, Boolean> deleteDocument(AuthenticatedPrincipal user, String id) {
     Document doc = documents.findFirstByIdAndTenantIdAndDeletedFalse(id, user.tenantId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
-    if (!doc.getOwnerId().equals(user.id()) && !"admin".equalsIgnoreCase(user.role())) {
-      boolean aclAdmin = acls
-          .findFirstByDocumentIdAndPrincipalTypeAndPrincipalIdAndPermission(
-              id, "USER", user.id(), "ADMIN")
-          .isPresent();
-      if (!aclAdmin) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found");
-      }
+    if (!canDeleteDocument(user, doc)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found");
     }
     doc.setDeleted(true);
     documents.save(doc);
@@ -262,6 +325,10 @@ public class IngestionService {
     boolean created;
     if (existing.isPresent()) {
       document = existing.get();
+      if (!user.id().equals(document.getOwnerId()) && !"admin".equalsIgnoreCase(user.role())) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "This content belongs to an existing document. Ask its owner or an administrator to update it.");
+      }
       document.setTitle(title);
       document.setClassification(classification);
       document.setDeleted(false);

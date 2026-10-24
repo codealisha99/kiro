@@ -140,7 +140,11 @@ public class RagService {
 
       List<RetrievedChunk> cited = citeChunks(parsed.answer(), chunks);
       List<RetrievedChunk> used = !cited.isEmpty() ? cited : chunks.subList(0, Math.min(3, chunks.size()));
-      List<Map<String, Object>> sources = used.stream().map(this::toCitation).toList();
+      List<Map<String, Object>> sources = used.stream().map(c -> {
+        Map<String, Object> source = toCitation(c);
+        source.put("citationIndex", chunks.indexOf(c) + 1);
+        return source;
+      }).toList();
       double confidence = computeConfidence(used);
 
       var response = saveResponse(request, parsed.answer(), parsed.status(), confidence,
@@ -258,16 +262,19 @@ public class RagService {
     r.setUsage(usage);
     responses.save(r);
 
-    java.util.Set<String> usedDocIds = new java.util.HashSet<>();
-    for (Map<String, Object> s : sources) usedDocIds.add(String.valueOf(s.get("documentId")));
+    Map<String, Integer> usedChunks = new java.util.HashMap<>();
+    for (Map<String, Object> source : sources) {
+      usedChunks.put(String.valueOf(source.get("chunkId")), (Integer) source.get("citationIndex"));
+    }
     for (RetrievedChunk c : allChunks) {
-      if (!usedDocIds.contains(c.documentId())) continue;
+      if (!usedChunks.containsKey(c.chunkId())) continue;
       ResponseEvidence e = new ResponseEvidence();
       e.setResponseId(r.getId());
       e.setDocumentId(c.documentId());
       e.setVersionId(c.versionId());
       e.setChunkId(c.chunkId());
       e.setRelevanceScore(c.score());
+      e.setCitationIndex(usedChunks.get(c.chunkId()));
       evidence.save(e);
     }
     return r;

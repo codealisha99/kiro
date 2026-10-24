@@ -111,20 +111,28 @@ class ConversationService {
       for (DocumentChunk ch : chunks.findByIdIn(allChunkIds)) chunkById.put(ch.getId(), ch);
     }
 
+    Map<String, java.util.Optional<Document>> visibleDocuments = new HashMap<>();
     List<Map<String, Object>> messages = new ArrayList<>();
     for (AiRequest r : reqs) {
       AiResponse resp = responseByRequest.get(r.getId());
       List<Map<String, Object>> srcs = new ArrayList<>();
+      boolean unavailableEvidence = false;
       for (ResponseEvidence e : evidenceByRequest.getOrDefault(r.getId(), List.of())) {
-        Document d = documents.findById(e.getDocumentId()).orElse(null);
+        Document d = visibleDocuments.computeIfAbsent(e.getDocumentId(), documentId ->
+            documents.findVisibleById(user.tenantId(), documentId, user.id(), user.roleUpper()))
+            .orElse(null);
         DocumentVersion v = versions.findById(e.getVersionId()).orElse(null);
         Source s = (d == null) ? null : sources.findById(d.getSourceId()).orElse(null);
-        if (d == null || v == null) continue;
+        if (d == null || v == null) {
+          unavailableEvidence = true;
+          continue;
+        }
         DocumentChunk ch = e.getChunkId() == null ? null : chunkById.get(e.getChunkId());
         String excerpt = "";
         if (ch != null && ch.getContent().length() > 240) excerpt = ch.getContent().substring(0, 240);
         else if (ch != null) excerpt = ch.getContent();
         var m = new LinkedHashMap<String, Object>();
+        if (e.getCitationIndex() != null) m.put("citationIndex", e.getCitationIndex());
         m.put("documentId", d.getId());
         m.put("chunkId", e.getChunkId());
         m.put("title", d.getTitle());
@@ -139,10 +147,13 @@ class ConversationService {
       var msg = new LinkedHashMap<String, Object>();
       msg.put("id", r.getId());
       msg.put("query", r.getQuery());
-      msg.put("answer", resp == null ? "" : resp.getAnswer());
-      msg.put("status", resp == null ? "answered" : resp.getStatus());
+      // Cached answers can contain restricted facts too; redact the whole turn.
+      msg.put("answer", unavailableEvidence
+          ? "This answer is no longer available because a supporting document was removed or your access changed. Ask again using your current sources."
+          : resp == null ? "" : resp.getAnswer());
+      msg.put("status", unavailableEvidence ? "unknown" : resp == null ? "error" : resp.getStatus());
       msg.put("createdAt", r.getCreatedAt().toString());
-      msg.put("sources", srcs);
+      msg.put("sources", unavailableEvidence ? List.of() : srcs);
       messages.add(msg);
     }
 

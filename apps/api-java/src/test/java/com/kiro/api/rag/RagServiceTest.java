@@ -128,6 +128,23 @@ class RagServiceTest {
   }
 
   @Test
+  void sparseCitationStoresOnlyTheExactChunkWithItsOriginalIndex() {
+    var first = chunk("c1", "Same document", 0.9);
+    var second = chunk("c2", "Same document", 0.8);
+    when(retrieval.search(eq(user), anyString(), eq(5))).thenReturn(List.of(first, second));
+    when(conversations.save(any())).thenAnswer(inv -> { Conversation c = inv.getArgument(0); c.setId("conv"); return c; });
+    when(ai.generate(anyString(), anyString(), any(), any())).thenReturn(
+        new AiServiceClient.GenerateResult("STATUS:answered\nPolicy [2]", "test", "1", Map.of()));
+    var result = service().query(user, "policy?", null);
+    var source = (Map<?, ?>) ((List<?>) result.get("sources")).get(0);
+    assertEquals(2, source.get("citationIndex"));
+    var captured = org.mockito.ArgumentCaptor.forClass(com.kiro.api.domain.ResponseEvidence.class);
+    verify(evidence, times(1)).save(captured.capture());
+    assertEquals("c2", captured.getValue().getChunkId());
+    assertEquals(2, captured.getValue().getCitationIndex());
+  }
+
+  @Test
   void blankQueryIsRejected() {
     assertThrows(org.springframework.web.server.ResponseStatusException.class,
         () -> service().query(user, "   ", null));

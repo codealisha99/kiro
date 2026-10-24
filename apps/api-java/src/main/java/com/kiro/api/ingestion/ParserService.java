@@ -101,13 +101,7 @@ public class ParserService {
       }
       return sb.toString().trim();
     } catch (Exception e) {
-      // Best-effort OOXML fallback (mirrors the NestJS tag-strip fallback).
-      String raw = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-      java.util.regex.Matcher m = java.util.regex.Pattern.compile("<t[^>]*>([^<]+)</t>").matcher(raw);
-      StringBuilder sb = new StringBuilder();
-      while (m.find()) sb.append(m.group(1)).append(' ');
-      if (!sb.isEmpty()) return sb.toString();
-      return raw.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+      throw new IOException("Could not read this spreadsheet", e);
     }
   }
 
