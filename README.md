@@ -2,7 +2,7 @@
 
 # Kiro
 
-A permission-aware company knowledge desk: add documents, ask questions, and inspect the evidence behind each answer. The default stack is Next.js, Spring Boot, PostgreSQL/pgvector, Redis and FastAPI. Model APIs are optional; keyword search and labelled source extracts work without them. Drive, Slack, CRM and S3 integrations are stubs.
+A permission-aware company knowledge desk: add documents, ask questions, and inspect the evidence behind each answer. The default stack is Next.js, Spring Boot, PostgreSQL/pgvector, Redis and FastAPI. Model APIs are optional; keyword search and labelled source extracts work without them. The Java API also provides persisted projects, tasks, scoped work metrics, dependency queries, evidence-backed insights with review states, and bounded what-if calculations. Drive, Slack, CRM and S3 integrations are stubs.
 
 ## Start locally
 
@@ -32,10 +32,13 @@ pnpm build
 mvn -f apps/api-java/pom.xml test
 ```
 
-Node tests cover the reference API and frontend transport, not live Java/AI workflows. This documentation pass verified these checks (78 tests), Python compilation, Compose configuration and public demo switching. Full local demo remains unverified: Docker daemon stopped, Java/Maven unavailable, no local API or provider calls.
+Node tests cover the reference API and frontend transport. The October 24 work-intelligence pass verified 92 reference API tests, 12 frontend transport tests, 82 Java tests (including PostgreSQL), lint, type checking, builds, clean Flyway migrations, and live work/insight API and browser workflows. Live external integrations and provider-backed generation remain unverified. See the [engineering report](docs/WORK_INTELLIGENCE_REPORT.md) for scope, exact commands and remaining platform gaps.
 
 ## Documentation
 
+- [Work intelligence report](docs/WORK_INTELLIGENCE_REPORT.md): audit, insight triage, verification, functional status and next implementation stages.
+
+- [Product audit](docs/PRODUCT_AUDIT.md): local improvements, verification results, migration notes, and remaining limitations.
 - [Project guide](docs/PROJECT_GUIDE.md): features, architecture and honest implementation status.
 - [Demo guide](docs/DEMO_GUIDE.md): setup, workflow, pitch and troubleshooting.
 - [API dependencies](docs/API_DEPENDENCIES.md): services, credentials, environment variables and official references.

@@ -139,3 +139,17 @@ The original cover photograph remains unchanged; its source and rights have not 
 Keep the established custom K-shaped mark and the Kiro product name. The browser icon now uses the exact proportions of `KiroMark`, rather than a separate interpretation. Reusable SVG assets live in `apps/web/public/brand`: a transparent mark and a paper-backed wordmark for repository documentation. The wordmark uses a Georgia fallback for portability; application typography continues to use IBM Plex Serif. The live reference shows the mark and wordmark in both preview themes.
 
 Use teal or the current foreground color for the mark. Preserve its aspect ratio, leave at least one stroke-width of clear space, and pair decorative marks with visible product text. Creator attribution belongs in maintenance information and the public footer. See `docs/OWNERSHIP.md` for identity, provenance, and asset limitations.
+
+
+## Evidence and library audit — 2026-10-12
+
+Keep the existing direction. Conversation search is a labeled native search field in the sidebar. Restricted documents use “Restricted” when listed or read, since explicit grants can allow other people to read them. The upload selector still uses “Only you” to explain the default grant for a new restricted document.
+
+The source reader lists real version metadata, warns when a citation used an older version, and offers removal only when the API confirms permission. Removal has a separate confirmation and an honest explanation of its effect on saved answers. Use shared buttons, alerts, and native details; all composition colors and spacing come from semantic tokens. DOCX and XLSX join the existing formats in the shared upload control and live component reference.
+
+
+## Document revision workflow — 2026-10-12
+
+Version-history actions open the actual full text of the selected version; citations open their cited version. Label earlier versions clearly and keep a route to the current document. Titles and access labels describe the current document, while content, filename, and save time describe the selected version.
+
+Authorized document edits use a focused text form within the source dialog. Keep the original file in its historical version, preserve access, protect unsaved drafts, and offer the latest text beside a conflicting draft before explicitly continuing. Reuse Field, Input, Textarea, Alert, and StatefulButton with semantic spacing and surfaces. Pending writes disable modal dismissal through `Dialog.closeDisabled`; the reference includes a labeled simulation of this state.
