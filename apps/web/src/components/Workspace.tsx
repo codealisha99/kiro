@@ -35,6 +35,7 @@ import DocumentActions from "./DocumentActions";
 import EvidencePanel from "./EvidencePanel";
 import KnowledgeLibrary from "./KnowledgeLibrary";
 import WorkDashboard from "./WorkDashboard";
+import OrganizationWorkspace from "./OrganizationWorkspace";
 import { KiroMark, WorkspaceIcon } from "./WorkspaceIcon";
 import "./workspace.css";
 
@@ -87,7 +88,7 @@ export default function Workspace({
   const [success, setSuccess] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"ask" | "library" | "work">("ask");
+  const [view, setView] = useState<"ask" | "library" | "work" | "organization">("ask");
   const [railOpen, setRailOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingDocument, setEditingDocument] = useState(false);
@@ -521,6 +522,9 @@ export default function Workspace({
             onClick={() => { setView("work"); setRailOpen(false); }}>
             <WorkspaceIcon name="book" />Work &amp; insights
           </button>
+          <button className={`nav-item ${view === "organization" ? "selected" : ""}`} aria-current={view === "organization" ? "page" : undefined} onClick={() => { setView("organization"); setRailOpen(false); }}>
+            <WorkspaceIcon name="book" /><span>Company dashboards</span>
+          </button>
         </nav>
         <div className="workspace-recents">
           <h2>Recent conversations</h2>
@@ -588,7 +592,7 @@ export default function Workspace({
               Workspace <span aria-hidden="true">/</span>
             </span>
             <span>
-              {view === "work" ? "Work & insights" : view === "library"
+              {view === "organization" ? "Company dashboards" : view === "work" ? "Work & insights" : view === "library"
                 ? "Knowledge library"
                 : currentTitle || "Ask Kiro"}
             </span>
@@ -633,7 +637,7 @@ export default function Workspace({
               </Button>
             )}
           </div>
-        ) : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
+        ) : view === "organization" ? <OrganizationWorkspace key={user?.id} /> : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
           <KnowledgeLibrary
             documents={documents}
             sources={sources}
@@ -885,7 +889,7 @@ export default function Workspace({
                   </div>
                 ) : (
                   <p className="composer-note">
-                    Answers link to the sources you can access.
+                    Knowledge answers cite your sources. Ask “What is blocked on my team?” for a snapshot of work you can access.
                   </p>
                 )}
               </div>
