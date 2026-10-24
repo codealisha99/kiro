@@ -45,6 +45,12 @@ class ConversationService {
   private final DocumentVersionRepository versions;
   private final DocumentChunkRepository chunks;
   private final SourceRepository sources;
+  private com.kiro.api.organization.OrganizationAnswerAccess organizationAnswerAccess;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setOrganizationAnswerAccess(com.kiro.api.organization.OrganizationAnswerAccess access) {
+    this.organizationAnswerAccess = access;
+  }
 
   ConversationService(
       ConversationRepository conversations,
@@ -116,7 +122,8 @@ class ConversationService {
     for (AiRequest r : reqs) {
       AiResponse resp = responseByRequest.get(r.getId());
       List<Map<String, Object>> srcs = new ArrayList<>();
-      boolean unavailableEvidence = false;
+      boolean unavailableEvidence = resp != null && "structured-work".equals(resp.getModel()) &&
+          (organizationAnswerAccess == null || !organizationAnswerAccess.canReplay(user, resp.getUsage()));
       for (ResponseEvidence e : evidenceByRequest.getOrDefault(r.getId(), List.of())) {
         Document d = visibleDocuments.computeIfAbsent(e.getDocumentId(), documentId ->
             documents.findVisibleById(user.tenantId(), documentId, user.id(), user.roleUpper()))
@@ -149,7 +156,7 @@ class ConversationService {
       msg.put("query", r.getQuery());
       // Cached answers can contain restricted facts too; redact the whole turn.
       msg.put("answer", unavailableEvidence
-          ? "This answer is no longer available because a supporting document was removed or your access changed. Ask again using your current sources."
+          ? "This answer is no longer available because its supporting records or your access changed. Ask again using your current sources."
           : resp == null ? "" : resp.getAnswer());
       msg.put("status", unavailableEvidence ? "unknown" : resp == null ? "error" : resp.getStatus());
       msg.put("createdAt", r.getCreatedAt().toString());

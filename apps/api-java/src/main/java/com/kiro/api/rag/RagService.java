@@ -58,6 +58,12 @@ public class RagService {
   private final AiServiceClient ai;
   private final MetricsService metrics;
   private OrganizationQueryRouter organizationQueries;
+  private com.kiro.api.organization.OrganizationAnswerAccess organizationAnswerAccess;
+
+  @Autowired
+  public void setOrganizationAnswerAccess(com.kiro.api.organization.OrganizationAnswerAccess access) {
+    this.organizationAnswerAccess = access;
+  }
 
   @Autowired(required = false)
   public void setOrganizationQueryRouter(OrganizationQueryRouter router) {
@@ -83,7 +89,7 @@ public class RagService {
     this.metrics = metrics;
   }
 
-  @Transactional
+  @Transactional(isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
   public Map<String, Object> query(AuthenticatedPrincipal user, String rawQuery, String conversationId) {
     String question = rawQuery == null ? "" : rawQuery.trim();
     if (question.isEmpty()) {
@@ -117,9 +123,10 @@ public class RagService {
       if (organizationQueries != null) {
         var structured = organizationQueries.route(user, question);
         if (structured.isPresent()) {
+          String fingerprint = organizationAnswerAccess == null ? null : organizationAnswerAccess.fingerprint(user);
           String answer = formatStructuredAnswer(structured.get());
           var response = saveResponse(request, answer, "answered", 1.0, List.of(), List.of(),
-              "structured-work", "1", null);
+              "structured-work", "1", fingerprint == null ? null : Map.of("authorizationFingerprint", fingerprint));
           audit(user, "query.completed", "response", response.getId(), question, List.of(),
               "allowed:structured_work", "structured-work", null);
           metrics.increment("brain.query.count");

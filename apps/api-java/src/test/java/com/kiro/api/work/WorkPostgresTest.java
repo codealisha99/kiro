@@ -173,4 +173,131 @@ class WorkPostgresTest {
     tx.execute(t->work.saveTask(owner,p,taskId,new TaskInput("New blocker","BLOCKED",null,BigDecimal.ONE,null,3)));
     assertEquals(2,work.insightList(owner,0).stream().filter(i->"BLOCKED".equals(i.get("rule"))).count());
   }
+  String scenario(String p,String name) {
+    return tx.execute(t->(String)work.scenario(owner,p,new ScenarioInput(name,LocalDate.now(),LocalDate.now().plusDays(7),BigDecimal.TEN,BigDecimal.ONE,"Synthetic planning assumption")).get("id"));
+  }
+  @Test void comparisonsRequireSameProjectPeriodAndCurrentAccess() {
+    String p=project("Planning"),other=project("Other");
+    String a=scenario(p,"First"),b=scenario(p,"Second"),foreign=scenario(other,"Other");
+    assertEquals(2,tx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(List.of(a,b)))).size());
+    for(var ids:List.of(List.of(a,a),List.of(a,foreign)))
+      assertThrows(ResponseStatusException.class,()->tx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(ids))));
+    db.update("UPDATE work_scenarios SET period_end=period_end+1 WHERE id=?",b);
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(List.of(a,b)))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.scenarioList(outsider,p)));
+  }
+  @Test void approvalsRequireIndependentWriterAndNotificationsRespectRevocation() {
+    String p=project("Approval"),s=scenario(p,"Feature");
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"WRITE"),false));
+    tx.execute(t->work.requestScenarioApproval(owner,s));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.requestScenarioApproval(owner,s)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.decideScenarioApproval(owner,s,new ScenarioApprovalInput("APPROVED",null,1))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.decideScenarioApproval(outsider,s,new ScenarioApprovalInput("APPROVED",null,1))));
+    String notification=(String)work.notifications(reader).getFirst().get("id");
+    assertTrue(work.notifications(admin).isEmpty());
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.markNotificationRead(admin,notification)));
+    tx.execute(t->work.markNotificationRead(reader,notification));
+    assertNotNull(work.notifications(reader).getFirst().get("read_at"));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.decideScenarioApproval(reader,s,new ScenarioApprovalInput("REJECTED"," ",1))));
+    tx.execute(t->work.decideScenarioApproval(reader,s,new ScenarioApprovalInput("APPROVED","Reviewed",1)));
+    assertEquals("APPROVED",((Map<?,?>)work.scenarioResult(owner,s).get("approval")).get("status"));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.decideScenarioApproval(reader,s,new ScenarioApprovalInput("REJECTED","Stale",1))));
+    assertEquals(1,work.notifications(owner).size());
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"WRITE"),true));
+    assertTrue(work.notifications(reader).isEmpty());
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.markNotificationRead(reader,notification)));
+    assertThrows(ResponseStatusException.class,()->work.scenarioResult(reader,s));
+    assertEquals(2L,db.queryForObject("SELECT count(*) FROM work_events WHERE kind IN ('SCENARIO_APPROVAL_REQUESTED','SCENARIO_APPROVAL_DECIDED')",Long.class));
+  }
+  @Test void outcomesHaveOptimisticVersionsAndRetainPriorValuesInHistory() {
+    String p=project("Outcomes"),s=scenario(p,"Feature");
+    var first=new ScenarioOutcomeInput("IN_PROGRESS",null,"Started",0);
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.saveScenarioOutcome(reader,s,first)));
+    tx.execute(t->work.saveScenarioOutcome(owner,s,first));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->work.saveScenarioOutcome(owner,s,first)));
+    tx.execute(t->work.saveScenarioOutcome(owner,s,new ScenarioOutcomeInput("DELIVERED",BigDecimal.TEN,"Measured completion",1)));
+    assertEquals("DELIVERED",((Map<?,?>)work.scenarioResult(owner,s).get("outcome")).get("status"));
+    assertEquals(2L,db.queryForObject("SELECT count(*) FROM work_events WHERE kind='SCENARIO_OUTCOME_RECORDED'",Long.class));
+  }
+
+  @Test void sourceMappingRequiresOwnershipWriteAccessAndExplicitSharing() {
+    String p=project("Mapped work");
+    tx.execute(t->work.grant(owner,p,new GrantInput(admin.id(),"WRITE"),false));
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),false));
+    var sources=new WorkSourceService(db,work,new com.kiro.api.organization.OrganizationService(db,new ObjectMapper()));
+    String c=UUID.randomUUID().toString(),r=UUID.randomUUID().toString();
+    db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at) VALUES (?,'org','admin','linear','Synthetic','team','READY',now())",c);
+    db.update("INSERT INTO provider_records(id,tenant_id,connection_id,external_id,kind,title,generation) VALUES (?,'org',?,'external-1','TASK','Shared issue','generation')",r,c);
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(admin,p,new WorkSourceService.MappingInput(r,null,"Related",false))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(outsider,p,new WorkSourceService.MappingInput(r,null,"Related",true))));
+    tx.execute(t->sources.map(admin,p,new WorkSourceService.MappingInput(r,null,"Verified task reference",true)));
+    var mapped=tx.execute(t->sources.list(reader,p,0)).getFirst();
+    assertEquals("CURRENT",mapped.get("freshness"));
+    assertEquals(1L,db.queryForObject("SELECT count(*) FROM work_tasks WHERE project_id=?",Long.class,p));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(admin,p,new WorkSourceService.MappingInput(r,null,"Duplicate",true))));
+    assertEquals(1L,db.queryForObject("SELECT count(*) FROM work_tasks WHERE project_id=?",Long.class,p));
+    db.update("UPDATE provider_records SET title='Provider edited title' WHERE id=?",r);
+    assertEquals("CHANGED",tx.execute(t->sources.list(reader,p,0)).getFirst().get("freshness"));
+    assertEquals("Shared issue",db.queryForObject("SELECT title FROM work_tasks WHERE project_id=?",String.class,p));
+    db.update("UPDATE provider_connections SET status='DISCONNECTED' WHERE id=?",c);
+    assertEquals("UNAVAILABLE",tx.execute(t->sources.list(reader,p,0)).getFirst().get("freshness"));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.revoke(reader,p,(String)mapped.get("id"))));
+    tx.execute(t->sources.revoke(owner,p,(String)mapped.get("id")));
+    assertTrue(tx.execute(t->sources.list(reader,p,0)).isEmpty());
+    assertEquals(1L,db.queryForObject("SELECT count(*) FROM work_tasks WHERE project_id=?",Long.class,p));
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),true));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.list(reader,p,0)));
+  }
+
+  PlanningService planning() {return new PlanningService(db,work,new ObjectMapper().findAndRegisterModules());}
+  @Test void planningLinksAreScopedAndSubtaskCyclesAreRejected() {
+    var plan=planning();String p=project("Planning"),other=project("Other");
+    String a=(String)task(p,"Parent","TODO",LocalDate.now(),BigDecimal.ONE).get("id");
+    String b=(String)task(p,"Child","TODO",LocalDate.now(),BigDecimal.ONE).get("id");
+    String foreign=(String)task(other,"Foreign","TODO",null,null).get("id");
+    var goal=new PlanningService.Goal("Launch","customers",BigDecimal.TEN,BigDecimal.ONE,LocalDate.now(),"Manual validated count",0);
+    String g=(String)((Map<?,?>)tx.execute(t->plan.goal(owner,p,null,goal))).get("id");
+    String initiative=(String)((Map<?,?>)tx.execute(t->plan.initiative(owner,p,new PlanningService.Initiative("Launch",g,"Adoption")))).get("id");
+    String milestone=(String)((Map<?,?>)tx.execute(t->plan.milestone(owner,p,new PlanningService.Milestone("Release",initiative,LocalDate.now())))).get("id");
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.initiative(owner,other,new PlanningService.Initiative("Invalid",g,"Hidden goal"))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.taskPlan(owner,p,a,new PlanningService.TaskPlan(foreign,null,"NORMAL",null,0))));
+    tx.execute(t->plan.taskPlan(owner,p,b,new PlanningService.TaskPlan(a,milestone,"HIGH","Java",0)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.taskPlan(owner,p,a,new PlanningService.TaskPlan(b,null,"NORMAL",null,0))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.taskPlan(owner,p,b,new PlanningService.TaskPlan(null,null,"NORMAL",null,0))));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.list(outsider,p)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.goal(owner,p,g,goal)));
+    var revised=new PlanningService.Goal("Launch","customers",BigDecimal.TEN,BigDecimal.TEN,LocalDate.now(),"Updated count",1);
+    tx.execute(t->plan.goal(owner,p,g,revised));
+    assertEquals(2L,db.queryForObject("SELECT count(*) FROM work_events WHERE kind='GOAL_RECORDED'",Long.class));
+  }
+  @Test void capacityUsesExactDeclaredWindowAndWithholdsIncompleteConclusions() {
+    var plan=planning();String p=project("Capacity");LocalDate start=LocalDate.now(),end=start.plusDays(7);
+    tx.execute(t->work.saveTask(owner,p,null,new TaskInput("Assigned","TODO",owner.id(),new BigDecimal("12"),end,null)));
+    var allocation=new PlanningService.Availability(owner.id(),start,end,new BigDecimal("8"),"Eight hours after leave");
+    String allocationId=(String)((Map<?,?>)tx.execute(t->plan.availability(owner,p,allocation))).get("id");
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.availability(owner,p,allocation)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.availability(owner,p,new PlanningService.Availability(outsider.id(),start,end,BigDecimal.TEN,"Invalid"))));
+    var rows=(List<?>)tx.execute(t->plan.capacity(owner,p,start,end)).get("people");
+    assertEquals(0,new BigDecimal("150").compareTo((BigDecimal)((Map<?,?>)rows.getFirst()).get("allocation_load_percent")));
+    var different=(List<?>)tx.execute(t->plan.capacity(owner,p,start,end.plusDays(1))).get("people");
+    assertNull(((Map<?,?>)different.getFirst()).get("allocation_load_percent"));
+    tx.execute(t->work.saveTask(owner,p,null,new TaskInput("Unknown","TODO",owner.id(),null,null,null)));
+    var incomplete=(List<?>)tx.execute(t->plan.capacity(owner,p,start,end)).get("people");
+    assertNull(((Map<?,?>)incomplete.getFirst()).get("allocation_load_percent"));
+    tx.execute(t->plan.revoke(owner,p,"availability",allocationId));
+    assertTrue(((List<?>)tx.execute(t->plan.list(owner,p)).get("availability")).isEmpty());
+  }
+  @Test void actualEffortIsAuditedAndCannotExceedDailyCalendarHours() {
+    var plan=planning();String p=project("Actuals");String a=(String)task(p,"Task","TODO",null,null).get("id");
+    var entry=new PlanningService.TimeEntry(a,LocalDate.now(),new BigDecimal("16"),"Recorded work");
+    String key=(String)((Map<?,?>)tx.execute(t->plan.time(owner,p,entry))).get("id");
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.time(owner,p,entry)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.time(reader,p,entry)));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->plan.time(owner,p,new PlanningService.TimeEntry(a,LocalDate.now().plusDays(1),BigDecimal.ONE,"Future"))));
+    tx.execute(t->plan.revoke(owner,p,"time",key));
+    assertTrue(((List<?>)tx.execute(t->plan.list(owner,p)).get("time_entries")).isEmpty());
+    tx.execute(t->plan.time(owner,p,entry));
+    assertEquals(2L,db.queryForObject("SELECT count(*) FROM work_time_entries",Long.class));
+  }
+
 }

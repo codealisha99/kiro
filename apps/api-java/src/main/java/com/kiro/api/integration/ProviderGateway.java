@@ -68,6 +68,16 @@ public class ProviderGateway {
     if(!valid) throw new ProviderFailure("INVALID_PROVIDER_RESOURCE",false,0);
   }
   private static String q(String value) { return URLEncoder.encode(value,StandardCharsets.UTF_8); }
+  /** One attempt only. Callers must persist approval and execution state before invoking. */
+  public Map<String,String> createGitHubIssue(String repository,String token,String title,String body,String actionId) {
+    validate("github",repository,"");
+    var result=request("https://api.github.com/repos/"+repository+"/issues","Bearer "+token,
+        json.createObjectNode().put("title",title).put("body",body+"\n\n<!-- kiro-action:"+actionId+" -->").toString(),
+        Map.of("X-GitHub-Api-Version","2026-03-10"));
+    String number=required(result,"number");
+    if(!number.matches("[0-9]+"))throw new ProviderFailure("INVALID_ACTION_RESULT",false,0);
+    return Map.of("externalId",required(result,"id"),"url","https://github.com/"+repository+"/issues/"+number);
+  }
   private JsonNode request(String url,String auth,String body,Map<String,String> extra) {
     try {
       var b=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Authorization",auth).header("Accept","application/json");
