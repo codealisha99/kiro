@@ -1,0 +1,25 @@
+.organization-workspace { padding: var(--space-6); display: grid; gap: var(--space-6); max-width: 1280px; width: 100%; margin-inline: auto; min-width: 0; }
+.org-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.organization-workspace h1 { font-family: var(--font-editorial); font-size: var(--text-2xl); font-weight: 400; margin: 0; }
+.organization-workspace h2 { font-size: var(--text-xl); margin-block: 0 var(--space-4); }
+.organization-workspace h3 { margin-block: var(--space-2); overflow-wrap: anywhere; }
+.org-eyebrow { color: var(--color-text-muted); font-size: var(--text-sm); }
+.org-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.org-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: var(--space-4); }
+.org-metrics strong { display: block; font-size: var(--text-2xl); font-variant-numeric: tabular-nums; margin-top: var(--space-2); }
+.org-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-4); }
+.org-form,.org-stack { display: grid; gap: var(--space-4); min-width: 0; }
+.org-form { margin-block: var(--space-4); }
+.org-form fieldset { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); }
+.org-check { display: flex; align-items: center; gap: var(--space-2); min-height: 42px; }
+.org-check input { accent-color: var(--color-accent); width: 18px; height: 18px; }
+.org-table-scroll { overflow-x: auto; min-width: 0; }
+.org-table-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: var(--text-sm); }
+.org-table-scroll th,.org-table-scroll td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); vertical-align: top; overflow-wrap: anywhere; max-width: 380px; }
+.org-table-scroll th { color: var(--color-text-muted); font-weight: 500; }
+.org-list { list-style: none; margin: 0; padding: 0; }
+.org-list li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding-block: var(--space-4); border-bottom: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.organization-workspace details { padding-block: var(--space-3); }
+.organization-workspace summary { cursor: pointer; min-height: 32px; }
+.organization-workspace p { overflow-wrap: anywhere; }
+@media(max-width:760px) { .organization-workspace { padding: var(--space-4); } .org-grid { grid-template-columns: minmax(0,1fr); } }
