@@ -26,13 +26,17 @@ public class UserController {
 
   private final UserService service;
 
-  public UserController(UserService service) {
+  private final com.kiro.api.organization.OrganizationService organization;
+
+  public UserController(UserService service, com.kiro.api.organization.OrganizationService organization) {
+    this.organization = organization;
     this.service = service;
   }
 
   @GetMapping
   @PreAuthorize("hasRole('ADMIN')")
   public List<UserDto> list(@AuthenticationPrincipal AuthenticatedPrincipal principal) {
+    organization.requireManage(principal,"ORG_MANAGE");
     return service.listByTenant(principal);
   }
 
@@ -41,6 +45,7 @@ public class UserController {
   public UserDto invite(
       @AuthenticationPrincipal AuthenticatedPrincipal principal,
       @RequestBody @jakarta.validation.Valid InviteRequest req) {
+    organization.requireManage(principal,"ORG_MANAGE");
     return service.invite(principal, req);
   }
 }
