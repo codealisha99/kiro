@@ -24,7 +24,7 @@ class GoogleDriveConnector implements Connector {
 
   @Override
   public Map<String, Object> health() {
-    return Map.of("status", "ok", "latencyMs", 1);
+    return Map.of("status", "unconfigured");
   }
 }
 
@@ -46,7 +46,7 @@ class SlackConnector implements Connector {
 
   @Override
   public Map<String, Object> health() {
-    return Map.of("status", "ok", "latencyMs", 1);
+    return Map.of("status", "unconfigured");
   }
 }
 
@@ -68,6 +68,6 @@ class CrmConnector implements Connector {
 
   @Override
   public Map<String, Object> health() {
-    return Map.of("status", "ok", "latencyMs", 1);
+    return Map.of("status", "unconfigured");
   }
 }

@@ -21,6 +21,12 @@ public class ResponseEvidence extends BaseEntity {
   @Column(name = "\"relevanceScore\"", nullable = false)
   private double relevanceScore;
 
+  @Column(name = "\"citationIndex\"")
+  private Integer citationIndex;
+
+  public Integer getCitationIndex() { return citationIndex; }
+  public void setCitationIndex(Integer v) { this.citationIndex = v; }
+
   public String getResponseId() { return responseId; }
   public void setResponseId(String v) { this.responseId = v; }
   public String getDocumentId() { return documentId; }

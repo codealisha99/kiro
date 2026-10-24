@@ -21,7 +21,7 @@ public class WebConfig implements WebMvcConfigurer {
     // Explicit allowlist only — never "*" in any profile.
     registry.addMapping("/**")
         .allowedOrigins(props.cors().allowedOrigins().toArray(String[]::new))
-        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .allowedHeaders("*")
         .allowCredentials(false)
         .maxAge(3600);

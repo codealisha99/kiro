@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +27,11 @@ record IngestBody(
     @NotBlank String content,
     String classification,
     List<AclGrantInput> acl) {}
+
+record UpdateDocumentBody(
+    @NotBlank @jakarta.validation.constraints.Size(max = 200) String title,
+    @NotBlank @jakarta.validation.constraints.Size(max = 400_000) String content,
+    @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.Min(1) Integer expectedVersion) {}
 
 record RevokeBody(@NotBlank String principalType, @NotBlank String principalId) {}
 
@@ -94,6 +100,20 @@ class DocumentController {
   public List<Map<String, Object>> versions(
       @AuthenticationPrincipal AuthenticatedPrincipal user, @PathVariable String id) {
     return ingestion.listVersions(user, id);
+  }
+
+  @GetMapping("/{id}/versions/{version}")
+  public Map<String, Object> version(
+      @AuthenticationPrincipal AuthenticatedPrincipal user,
+      @PathVariable String id, @PathVariable int version) {
+    return ingestion.getDocument(user, id, version);
+  }
+
+  @PatchMapping("/{id}")
+  public Map<String, Object> update(
+      @AuthenticationPrincipal AuthenticatedPrincipal user, @PathVariable String id,
+      @RequestBody @jakarta.validation.Valid UpdateDocumentBody body) {
+    return ingestion.updateDocument(user, id, body.title(), body.content(), body.expectedVersion());
   }
 
   @GetMapping("/{id}")

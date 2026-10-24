@@ -34,7 +34,10 @@ public class ConnectorService {
         .filter(c -> c.type().equalsIgnoreCase(source.getType()))
         .findFirst()
         .orElse(null);
-    if (connector == null) return Map.of("synced", 0);
+    if (connector == null || !"ok".equals(connector.health().get("status"))) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+          "This integration is not configured; no external synchronization has occurred");
+    }
     int synced = 0;
     for (ConnectorDocument d : connector.fetch(tenantId)) {
       List<AclGrantInput> acl = new ArrayList<>();

@@ -28,10 +28,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
   private final JwtService jwt;
   private final StringRedisTemplate redis;
+  private final com.kiro.api.domain.SessionRepository sessions;
+  private final com.kiro.api.domain.UserRepository users;
 
-  public JwtAuthFilter(JwtService jwt, StringRedisTemplate redis) {
+  public JwtAuthFilter(JwtService jwt, StringRedisTemplate redis,
+      com.kiro.api.domain.SessionRepository sessions, com.kiro.api.domain.UserRepository users) {
     this.jwt = jwt;
     this.redis = redis;
+    this.sessions = sessions;
+    this.users = users;
   }
 
   @Override
@@ -42,6 +47,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
       String token = header.substring(7).trim();
       try {
         AuthenticatedPrincipal principal = jwt.parse(token);
+        var session = sessions.findByToken(token).orElse(null);
+        var user = users.findById(principal.id()).orElse(null);
+        if (session == null || !session.getUserId().equals(principal.id())
+            || !session.getExpiresAt().isAfter(java.time.Instant.now())
+            || user == null || !user.getTenantId().equals(principal.tenantId())) {
+          throw new JwtException("Session no longer valid");
+        }
+        // Current database role wins over stale JWT role claims.
+        principal = new AuthenticatedPrincipal(user.getId(), user.getEmail(), user.getTenantId(), user.getRole().toLowerCase());
         String marker = redis.opsForValue().get("session:" + principal.id());
         if (marker == null || !marker.equals(token)) {
           res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

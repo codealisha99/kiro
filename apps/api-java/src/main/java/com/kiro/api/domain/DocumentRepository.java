@@ -11,6 +11,10 @@ public interface DocumentRepository extends JpaRepository<Document, String> {
   Optional<Document> findFirstByTenantIdAndSourceIdAndExternalId(
       String tenantId, String sourceId, String externalId);
 
+  @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+  @Query("select d from Document d where d.id = :id and d.tenantId = :tenantId and d.deleted = false")
+  Optional<Document> findForUpdate(String id, String tenantId);
+
   long countByTenantIdAndDeletedFalse(String tenantId);
 
   // Same visibility rule as retrieval SQL: owner, PUBLIC/INTERNAL, or explicit USER/ROLE grant.

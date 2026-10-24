@@ -114,6 +114,13 @@ public class IngestJobService {
       } catch (Exception e) {
         if (!running.get()) return;
         log.warn("Embed worker pop failed: {}", e.toString());
+        // Redis failures can return immediately. Avoid a hot loop during outages.
+        try {
+          Thread.sleep(1_000);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          return;
+        }
       }
     }
   }
