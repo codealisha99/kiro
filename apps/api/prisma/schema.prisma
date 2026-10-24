@@ -241,6 +241,7 @@ model ResponseEvidence {
   versionId      String
   chunkId        String?
   relevanceScore Float
+  citationIndex  Int?
 
   response AIResponse       @relation(fields: [responseId], references: [id], onDelete: Cascade)
   document Document         @relation(fields: [documentId], references: [id])

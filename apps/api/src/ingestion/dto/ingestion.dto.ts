@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsArray, IsIn, IsOptional, IsString, MinLength, ValidateNested } from "class-validator";
+import { IsArray, IsIn, IsInt, MaxLength, Min, IsOptional, IsString, MinLength, ValidateNested } from "class-validator";
 
 export class CreateSourceDto {
   @IsIn(["google_drive", "slack", "crm", "manual"])
@@ -50,4 +50,20 @@ export class RevokeAclDto {
   @IsString()
   @MinLength(1)
   principalId!: string;
+}
+
+export class UpdateDocumentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  title!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(400_000)
+  content!: string;
+
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
 }

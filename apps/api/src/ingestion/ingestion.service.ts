@@ -1,4 +1,6 @@
+import { visibleDocumentsWhere } from "../common/document-visibility";
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -142,7 +144,7 @@ export class IngestionService {
     };
   }
 
-  async getDocument(user: AuthenticatedUser, id: string) {
+  async getDocument(user: AuthenticatedUser, id: string, requestedVersion?: number) {
     const doc = await this.prisma.document.findFirst({
       where: { ...this.visibleWhere(user), id },
       include: {
@@ -153,7 +155,10 @@ export class IngestionService {
       throw new NotFoundException("Document not found");
     }
 
-    const latest = doc.versions[0];
+    const latest = requestedVersion === undefined
+      ? doc.versions[0]
+      : doc.versions.find((version) => version.version === requestedVersion);
+    if (requestedVersion !== undefined && !latest) throw new NotFoundException("Document version not found");
     const chunks = latest
       ? await this.prisma.documentChunk.findMany({
           where: { documentVersionId: latest.id },
@@ -166,6 +171,7 @@ export class IngestionService {
       return ai - bi;
     });
 
+    const canManage = await this.canDeleteDocument(user, doc);
     return {
       id: doc.id,
       sourceId: doc.sourceId,
@@ -174,6 +180,10 @@ export class IngestionService {
       status: doc.status.toLowerCase(),
       updatedAt: doc.updatedAt,
       versionCount: doc.versions.length,
+      canDelete: canManage,
+      canEdit: canManage,
+      selectedVersion: latest?.version ?? null,
+      versionCreatedAt: latest?.createdAt ?? null,
       content: latest?.content ?? ordered.map((c) => c.content).join("\n\n"),
       filename: latest?.filename ?? null,
       chunks: ordered.map((c) => ({
@@ -189,6 +199,46 @@ export class IngestionService {
         createdAt: v.createdAt,
       })),
     };
+  }
+
+  async updateDocument(user: AuthenticatedUser, id: string,
+    body: { title: string; content: string; expectedVersion: number }) {
+    if (!body.title.trim() || body.title.length > 200 || !body.content.trim() || body.content.length > 400_000) {
+      throw new BadRequestException("Use a title of up to 200 characters and document text of up to 400,000 characters.");
+    }
+    const revisionId = await this.prisma.$transaction(async (tx) => {
+      // Lock the document before checking the version to serialize competing editors.
+      await tx.$queryRaw`SELECT id FROM documents WHERE id = ${id} AND "tenantId" = ${user.tenantId} AND deleted = false FOR UPDATE`;
+      const doc = await tx.document.findFirst({ where: { id, tenantId: user.tenantId, deleted: false } });
+      if (!doc) throw new NotFoundException("Document not found");
+      if (doc.ownerId !== user.id && user.role !== "admin") {
+        const grant = await tx.documentACL.findFirst({ where: {
+          documentId: id, principalType: PrincipalType.USER, principalId: user.id, permission: Permission.ADMIN,
+        } });
+        if (!grant) throw new NotFoundException("Document not found");
+      }
+      const previous = await tx.documentVersion.findFirst({ where: { documentId: id }, orderBy: { version: "desc" } });
+      if (!previous || previous.version !== body.expectedVersion) {
+        throw new ConflictException("A newer version was saved. Your changes have not been applied. Open the current version before editing again.");
+      }
+      const title = body.title.trim();
+      const content = body.content.trim();
+      const contentHash = createHash("sha256").update(content).digest("hex");
+      if (title === doc.title && contentHash === previous.contentHash) return null;
+      const raw = this.chunker.chunk(content);
+      if (!raw.length) throw new BadRequestException("Document produced no searchable text");
+      const revision = await tx.documentVersion.create({ data: {
+        documentId: id, version: previous.version + 1, contentHash, content, approvalStatus: "APPROVED",
+      } });
+      await tx.documentChunk.createMany({ data: raw.map((chunk) => ({
+        documentVersionId: revision.id, content: chunk.content, metadata: { index: chunk.index, source: "edit" },
+      })) });
+      await tx.document.update({ where: { id }, data: { title, updatedAt: new Date() } });
+      return revision.id;
+    });
+    // A saved revision is still usable by keyword search if queueing is unavailable.
+    if (revisionId) await this.queue.enqueueEmbedVersion(revisionId).catch(() => undefined);
+    return this.getDocument(user, id);
   }
 
   async listVersions(user: AuthenticatedUser, id: string) {
@@ -212,17 +262,19 @@ export class IngestionService {
     }));
   }
 
+  private async canDeleteDocument(user: AuthenticatedUser, doc: { id: string; ownerId: string }) {
+    if (doc.ownerId === user.id || user.role === "admin") return true;
+    return !!(await this.prisma.documentACL.findFirst({
+      where: { documentId: doc.id, principalType: PrincipalType.USER, principalId: user.id, permission: Permission.ADMIN },
+    }));
+  }
+
   async deleteDocument(user: AuthenticatedUser, id: string) {
     const doc = await this.prisma.document.findFirst({
       where: { tenantId: user.tenantId, id, deleted: false },
     });
     if (!doc) throw new NotFoundException("Document not found");
-    if (doc.ownerId !== user.id && user.role !== "admin") {
-      const acl = await this.prisma.documentACL.findFirst({
-        where: { documentId: id, principalType: PrincipalType.USER, principalId: user.id, permission: Permission.ADMIN },
-      });
-      if (!acl) throw new NotFoundException("Document not found");
-    }
+    if (!(await this.canDeleteDocument(user, doc))) throw new NotFoundException("Document not found");
     await this.prisma.document.update({ where: { id }, data: { deleted: true } });
     return { ok: true };
   }
@@ -264,29 +316,27 @@ export class IngestionService {
       input.externalId ??
       `manual:${contentHash.slice(0, 16)}`;
 
-    const document = await this.prisma.document.upsert({
-      where: {
-        tenantId_sourceId_externalId: {
-          tenantId: user.tenantId,
-          sourceId: source.id,
-          externalId,
-        },
-      },
-      create: {
-        tenantId: user.tenantId,
-        sourceId: source.id,
-        externalId,
-        title: input.title,
-        ownerId: user.id,
-        classification,
-      },
-      update: {
-        updatedAt: new Date(),
-        title: input.title,
-        deleted: false,
-        classification,
-      },
+    const existing = await this.prisma.document.findUnique({
+      where: { tenantId_sourceId_externalId: { tenantId: user.tenantId, sourceId: source.id, externalId } },
     });
+    if (existing && existing.ownerId !== user.id && user.role !== "admin") {
+      throw new ConflictException("This content belongs to an existing document. Ask its owner or an administrator to update it.");
+    }
+    // Creating separately keeps a concurrent duplicate from updating an unchecked owner.
+    const document = existing
+      ? await this.prisma.document.update({
+          where: { id: existing.id },
+          data: { updatedAt: new Date(), title: input.title, deleted: false, classification },
+        })
+      : await this.prisma.document.create({
+          data: { tenantId: user.tenantId, sourceId: source.id, externalId,
+            title: input.title, ownerId: user.id, classification },
+        }).catch((error: unknown) => {
+          if ((error as { code?: string })?.code === "P2002") {
+            throw new ConflictException("A matching document was just added. Refresh your library before trying again.");
+          }
+          throw error;
+        });
 
     const latestVersion = await this.prisma.documentVersion.findFirst({
       where: { documentId: document.id },
@@ -415,33 +465,7 @@ export class IngestionService {
   }
 
   visibleWhere(user: AuthenticatedUser) {
-    const roleKey = user.role.toUpperCase();
-    return {
-      tenantId: user.tenantId,
-      deleted: false,
-      OR: [
-        { ownerId: user.id },
-        { classification: { in: ["PUBLIC", "INTERNAL"] as ClassificationName[] } },
-        {
-          acl: {
-            some: {
-              principalType: PrincipalType.USER,
-              principalId: user.id,
-              permission: { in: [Permission.READ, Permission.WRITE, Permission.ADMIN] },
-            },
-          },
-        },
-        {
-          acl: {
-            some: {
-              principalType: PrincipalType.ROLE,
-              principalId: roleKey,
-              permission: { in: [Permission.READ, Permission.WRITE, Permission.ADMIN] },
-            },
-          },
-        },
-      ],
-    };
+    return visibleDocumentsWhere(user);
   }
 
   private async ensureNamedSource(tenantId: string, name: string) {

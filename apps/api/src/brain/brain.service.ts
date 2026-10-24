@@ -135,7 +135,7 @@ export class BrainService {
 
       const cited = this.citeChunks(parsed.answer, chunks);
       const used = cited.length > 0 ? cited : chunks.slice(0, 3);
-      const sources = used.map((c) => this.toCitation(c));
+      const sources = used.map((c) => ({ ...this.toCitation(c), citationIndex: chunks.indexOf(c) + 1 }));
       const confidence = this.computeConfidence(used);
 
       const response = await this.saveResponse(
@@ -206,7 +206,7 @@ export class BrainService {
     modelVersion: string | null = null,
     usage: Record<string, number> | null = null,
   ) {
-    const used = new Set(sources.map((s) => s.documentId));
+    const used = new Map(sources.map((s) => [s.chunkId, s.citationIndex]));
     const response = await this.prisma.aIResponse.create({
       data: {
         requestId: request.id,
@@ -219,7 +219,7 @@ export class BrainService {
       },
     });
 
-    const evidence = allChunks.filter((c) => used.has(c.documentId));
+    const evidence = allChunks.filter((c) => used.has(c.chunkId));
     if (evidence.length > 0) {
       await this.prisma.responseEvidence.createMany({
         data: evidence.map((c) => ({
@@ -228,6 +228,7 @@ export class BrainService {
           versionId: c.versionId,
           chunkId: c.chunkId,
           relevanceScore: c.score,
+          citationIndex: used.get(c.chunkId),
         })),
       });
     }

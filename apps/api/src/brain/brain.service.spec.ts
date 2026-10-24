@@ -90,6 +90,23 @@ describe("BrainService", () => {
     expect(prisma.responseEvidence.createMany).toHaveBeenCalled();
   });
 
+  it("keeps sparse citation numbers and stores only the exact cited chunk", async () => {
+    const prisma = buildPrisma();
+    const first = makeChunk();
+    const second = { ...makeChunk(), chunkId: "chunk-2" };
+    const service = new BrainService(prisma,
+      { search: jest.fn().mockResolvedValue([first, second]) } as any,
+      { generate: jest.fn().mockResolvedValue({ text: "STATUS:answered\nPolicy [2]", model: "test" }) } as any,
+      { get: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: "conv" }) } as any,
+      { incr: jest.fn(), observeLatency: jest.fn() } as any);
+    const result = await service.query(user, { query: "policy?" });
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]).toMatchObject({ chunkId: "chunk-2", citationIndex: 2 });
+    expect((prisma.responseEvidence.createMany as jest.Mock).mock.calls[0][0].data).toEqual([
+      expect.objectContaining({ chunkId: "chunk-2", citationIndex: 2 }),
+    ]);
+  });
+
   it("maps an LLM unknown verdict to the unknown status", async () => {
     const prisma = buildPrisma();
     const conversations = {
