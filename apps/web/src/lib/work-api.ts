@@ -2,6 +2,7 @@ import { request } from "./api";
 
 export interface WorkProject {
   id: string; name: string; owner_id: string; updated_at: string;
+  team_id?: string | null; restricted?: boolean;
   can_write?: boolean; can_manage_access?: boolean;
 }
 export interface WorkTask {
@@ -18,6 +19,7 @@ export interface WorkInsight {
   triage_status: "OPEN" | "ACKNOWLEDGED" | "DISMISSED";
   triage_reason: string | null; triage_version: number;
 }
+export interface WorkNotification { id: string; kind: "SCENARIO_APPROVAL_REQUESTED" | "SCENARIO_APPROVAL_DECIDED"; resource_id: string; created_at: string; read_at: string | null; project_name: string; }
 export interface WorkOverview {
   metrics: {
     total_tasks: number; completed_tasks: number; blocked_tasks: number;
@@ -28,13 +30,16 @@ export interface WorkOverview {
   freshness: string; utilizationUnavailable: string;
 }
 export interface WorkDetail {
-  project: WorkProject; tasks: WorkTask[]; members: { id: string; name: string | null }[];
+  project: WorkProject; tasks: WorkTask[]; members: { id: string; name: string | null }[]; viewer_id: string;
 }
 export interface WorkScenario {
   id: string; name: string; assessment: string; remaining_assumed_hours: number | null;
+  period_start: string; period_end: string;
   method: string; limitations: string; known_remaining_hours: number; proposed_hours: number;
   available_hours: number; missing_estimates: number; undated_tasks: number;
   evidence: { task_id: string; task_version: number; remaining_hours: number | null; due_date: string | null }[];
+  approval: { status: "NONE" | "PENDING" | "APPROVED" | "REJECTED"; requested_by?: string; reason?: string | null; version: number };
+  outcome: { status: "NONE" | "IN_PROGRESS" | "DELIVERED" | "NOT_DELIVERED" | "CANCELLED"; actual_hours?: number | null; note?: string; version: number };
 }
 const path = (id: string) => `/work/projects/${encodeURIComponent(id)}`;
 export const workApi = {
@@ -59,4 +64,15 @@ export const workApi = {
   history: (id: string) => request<{ id: string; kind: string; occurred_at: string; payload: string }[]>(`${path(id)}/history`),
   scenario: (id: string, body: { name: string; periodStart: string; periodEnd: string; availableHours: number; proposedHours: number; rationale: string }) =>
     request<WorkScenario>(`${path(id)}/scenarios`, { method: "POST", body }),
+  scenarios: (id: string) => request<WorkScenario[]>(`${path(id)}/scenarios`),
+  compareScenarios: (id: string, ids: string[]) =>
+    request<WorkScenario[]>(`${path(id)}/scenarios/compare`, { method: "POST", body: { ids } }),
+  scenarioResult: (id: string) => request<WorkScenario>(`/work/scenarios/${encodeURIComponent(id)}`),
+  requestScenarioApproval: (id: string) => request<WorkScenario>(`/work/scenarios/${encodeURIComponent(id)}/approval`, { method: "POST" }),
+  decideScenarioApproval: (id: string, status: "APPROVED" | "REJECTED", reason: string, expectedVersion: number) =>
+    request<WorkScenario>(`/work/scenarios/${encodeURIComponent(id)}/approval/decision`, { method: "POST", body: { status, reason, expectedVersion } }),
+  saveScenarioOutcome: (id: string, body: { status: "IN_PROGRESS" | "DELIVERED" | "NOT_DELIVERED" | "CANCELLED"; actualHours: number | null; note: string; expectedVersion: number }) =>
+    request<WorkScenario>(`/work/scenarios/${encodeURIComponent(id)}/outcome`, { method: "PUT", body }),
+  notifications: () => request<WorkNotification[]>("/work/notifications"),
+  readNotification: (id: string) => request(`/work/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }),
 };

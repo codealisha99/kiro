@@ -66,6 +66,7 @@ async function sendRequest(
   const slowOperation = options.method !== "GET" && (
     ["/brain/query", "/documents", "/documents/upload", "/documents/demo", "/evals/rag"].includes(path)
     || options.method === "PATCH"
+    || /^\/integrations\/[^/]+\/sync$/.test(path)
   );
   const timeoutMs = slowOperation ? 120_000 : 20_000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -80,7 +81,7 @@ async function sendRequest(
     });
   } catch {
     throw new Error(controller.signal.aborted
-      ? "This request took too long. Check your library or conversation before retrying; it may have completed."
+      ? "This request took too long. Refresh the relevant view before retrying; it may have completed."
       : "We couldn’t reach Kiro. Check your connection and try again.");
   } finally {
     clearTimeout(timer);
