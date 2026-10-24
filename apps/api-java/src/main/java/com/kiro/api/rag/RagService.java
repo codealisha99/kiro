@@ -16,6 +16,7 @@ import com.kiro.api.domain.ResponseEvidenceRepository;
 import com.kiro.api.retrieval.RetrievedChunk;
 import com.kiro.api.retrieval.RetrievalService;
 import com.kiro.api.security.AuthenticatedPrincipal;
+import com.kiro.api.organization.OrganizationQueryRouter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -55,6 +57,12 @@ public class RagService {
   private final RetrievalService retrieval;
   private final AiServiceClient ai;
   private final MetricsService metrics;
+  private OrganizationQueryRouter organizationQueries;
+
+  @Autowired(required = false)
+  public void setOrganizationQueryRouter(OrganizationQueryRouter router) {
+    this.organizationQueries = router;
+  }
 
   public RagService(
       ConversationRepository conversations,
@@ -106,6 +114,19 @@ public class RagService {
 
     long t0 = System.currentTimeMillis();
     try {
+      if (organizationQueries != null) {
+        var structured = organizationQueries.route(user, question);
+        if (structured.isPresent()) {
+          String answer = formatStructuredAnswer(structured.get());
+          var response = saveResponse(request, answer, "answered", 1.0, List.of(), List.of(),
+              "structured-work", "1", null);
+          audit(user, "query.completed", "response", response.getId(), question, List.of(),
+              "allowed:structured_work", "structured-work", null);
+          metrics.increment("brain.query.count");
+          metrics.recordLatency("brain.query", System.currentTimeMillis() - t0, false);
+          return answerPayload(request, conversation, question, answer, "answered", 1.0, List.of());
+        }
+      }
       List<RetrievedChunk> chunks = retrieval.search(user, question, TOP_K);
 
       if (chunks.isEmpty()) {
@@ -292,6 +313,48 @@ public class RagService {
     out.put("confidence", confidence);
     out.put("sources", sources);
     return out;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String formatStructuredAnswer(Map<String, Object> data) {
+    StringBuilder out = new StringBuilder("From authorized, recorded work (")
+        .append(data.get("scope")).append(" view), calculated ")
+        .append(data.get("calculatedAt")).append(":\n\n");
+    Object metricValue = data.get("metrics");
+    if (metricValue instanceof Map<?, ?> metrics) {
+      out.append("- ").append(metrics.get("tasks")).append(" recorded tasks; ")
+          .append(metrics.get("completed")).append(" completed, ")
+          .append(metrics.get("blocked")).append(" blocked, and ")
+          .append(metrics.get("overdue")).append(" overdue.\n")
+          .append("- Known remaining effort: ").append(metrics.get("remaining_hours"))
+          .append(" hours; ").append(metrics.get("missing_estimates"))
+          .append(" unfinished tasks have no estimate.\n");
+    }
+    appendRows(out, data, "risks", "Open observations", row ->
+        row.get("rule") + " — " + row.get("title") + " (" + row.get("project_name") + ")");
+    appendRows(out, data, "tasks", "Open tasks", row ->
+        row.get("title") + " — " + row.get("status") + ", due " + row.get("due_date") +
+            " (" + row.get("project_name") + ")");
+    appendRows(out, data, "workload", "Recorded workload", row ->
+        (row.get("name") == null ? "Unassigned" : row.get("name")) + ": " + row.get("tasks") +
+            " tasks, " + row.get("estimated_hours") + " known hours");
+    appendRows(out, data, "teams", "Team summaries", row ->
+        row.get("name") + ": " + row.get("projects") + " projects, " + row.get("blocked") + " blocked tasks");
+    appendRows(out, data, "departments", "Department summaries", row ->
+        row.get("name") + ": " + row.get("projects") + " projects, " + row.get("blocked") + " blocked tasks");
+    appendRows(out, data, "projects", "Projects in scope", row ->
+        row.get("name") + ": " + row.get("tasks") + " tasks, " + row.get("blocked") + " blocked");
+    return out.append("\nThese figures reflect records visible to your current access. Hours are estimates, and this snapshot does not forecast delivery or utilization.").toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void appendRows(StringBuilder out, Map<String, Object> data, String key,
+      String heading, java.util.function.Function<Map<String, Object>, String> render) {
+    Object value = data.get(key);
+    if (!(value instanceof List<?> rows) || rows.isEmpty()) return;
+    out.append("\n").append(heading).append(":\n");
+    rows.stream().limit(5).filter(Map.class::isInstance).map(row -> (Map<String, Object>) row)
+        .forEach(row -> out.append("- ").append(render.apply(row)).append("\n"));
   }
 
   private void audit(
