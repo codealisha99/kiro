@@ -5,6 +5,8 @@ import { Alert, Badge, Button, Card, Dialog, Field, Input, Select } from "@/comp
 import { workApi, type WorkDetail, type WorkInsight, type WorkNotification, type WorkOverview, type WorkProject, type WorkTask, type WorkScenario } from "@/lib/work-api";
 import "./work-dashboard.css";
 import { orgApi, type DataRow } from "@/lib/organization-api";
+import ProjectSources from "./ProjectSources";
+import ProjectPlanning from "./ProjectPlanning";
 
 const emptyTask = { title: "", status: "TODO" as WorkTask["status"], assigneeId: "", remainingHours: "", dueDate: "" };
 const labels = { OVERDUE: "Overdue commitment", BLOCKED: "Recorded blocker", UNASSIGNED: "Ownership gap" };
@@ -167,6 +169,8 @@ export default function WorkDashboard() {
           <Button variant="secondary" disabled={busy} onClick={() => void action(async () => setHistory(await workApi.history(detail.project.id)))}>Change history</Button>
           {detail.project.can_write && <Button disabled={busy} onClick={() => editTask()}>Add task</Button>}
         </div></div>
+      <details><summary>Planning, goals and capacity</summary><ProjectPlanning key={detail.project.id} detail={detail} /></details>
+      <ProjectSources key={detail.project.id} projectId={detail.project.id} canWrite={!!detail.project.can_write} />
       {!detail.tasks.length && <p>No tasks on this page.</p>}
       <ul className="work-list">{detail.tasks.map(t => <li key={t.id}>
         <div className="work-heading"><div><h3>{t.title}</h3><Badge>{t.status.replaceAll("_", " ")}</Badge>

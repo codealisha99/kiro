@@ -69,4 +69,22 @@ class ConversationServiceTest {
     assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.get(user, "conv"));
     verifyNoInteractions(requests, documents);
   }
+  @Test void structuredHistoryFailsClosedWithoutReplayAuthorization() {
+    var c=new Conversation(); c.setId("conv");
+    var r=new AiRequest(); r.setId("req"); r.setQuery("Team workload?");
+    var a=new AiResponse(); a.setId("resp");a.setModel("structured-work");a.setAnswer("Restricted project totals");
+    when(conversations.findFirstByIdAndTenantIdAndUserId("conv","tenant","reader")).thenReturn(Optional.of(c));
+    when(requests.findByConversationIdOrderByCreatedAtAsc("conv")).thenReturn(List.of(r));
+    when(responses.findByRequestIdOrderByCreatedAtDesc("req")).thenReturn(List.of(a));
+    var access=mock(com.kiro.api.organization.OrganizationAnswerAccess.class);
+    service.setOrganizationAnswerAccess(access);
+    var messages=(List<?>)service.get(user,"conv").get("messages");
+    assertFalse(messages.toString().contains("Restricted project totals"));
+    a.setUsage(Map.of("authorizationFingerprint","same"));
+    when(access.canReplay(user,a.getUsage())).thenReturn(true);
+    assertTrue(service.get(user,"conv").toString().contains("Restricted project totals"));
+    when(access.canReplay(user,a.getUsage())).thenReturn(false);
+    assertFalse(service.get(user,"conv").toString().contains("Restricted project totals"));
+  }
+
 }

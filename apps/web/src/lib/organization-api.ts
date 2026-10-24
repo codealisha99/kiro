@@ -29,4 +29,7 @@ export const orgApi = {
   disconnect: (id: string) => request(`/integrations/${encodeURIComponent(id)}`, { method: "DELETE" }),
   records: (id: string, offset = 0) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/records?offset=${offset}`),
   runs: (id: string) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/runs`),
+  mapSource: (projectId: string, body: unknown) => request(`/work/projects/${encodeURIComponent(projectId)}/sources`, { method: "POST", body }),
+  projectSources: (projectId: string, offset = 0) => request<DataRow[]>(`/work/projects/${encodeURIComponent(projectId)}/sources?offset=${offset}`),
+  revokeSource: (projectId: string, id: string) => request(`/work/projects/${encodeURIComponent(projectId)}/sources/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };

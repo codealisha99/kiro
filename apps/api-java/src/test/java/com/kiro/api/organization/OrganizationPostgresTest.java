@@ -90,4 +90,20 @@ class OrganizationPostgresTest {
   assertTrue(work.projects(outsider,0).isEmpty());
   assertThrows(ResponseStatusException.class,()->tx.execute(x->work.detail(outsider,p,0)));
  }
+ @Test void savedAggregateAuthorizationChangesAfterProjectOrRoleRevocation() {
+  String t=team(department("Replay")),p=project(t,false);
+  var access=new OrganizationAnswerAccess(db);
+  var binding=tx.execute(x->org.bind(admin,new BindingInput("org:role:manager",manager.id(),"TEAM",null,t)));
+  var saved=Map.<String,Object>of("authorizationFingerprint",access.fingerprint(manager));
+  assertTrue(access.canReplay(manager,saved));
+  assertFalse(access.canReplay(outsider,saved));
+  assertFalse(access.canReplay(manager,null));
+  tx.execute(x->work.organizationalScope(admin,p,t,true));
+  assertFalse(access.canReplay(manager,saved));
+  tx.execute(x->work.organizationalScope(admin,p,t,false));
+  assertTrue(access.canReplay(manager,saved));
+  tx.execute(x->org.revoke(admin,(String)binding.get("id")));
+  assertFalse(access.canReplay(manager,saved));
+ }
+
 }
