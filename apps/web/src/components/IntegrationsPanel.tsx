@@ -5,6 +5,8 @@ import { orgApi, type Catalog, type DataRow } from "@/lib/organization-api";
 import { DataTable } from "./OrganizationWorkspace";
 import { workApi, type WorkProject, type WorkTask } from "@/lib/work-api";
 
+const shareableRecordKinds = ["ISSUE", "TASK", "PULL_REQUEST", "MESSAGE", "DEAL", "INVOICE", "EMPLOYEE", "MARKETING_METRIC"];
+
 export default function IntegrationsPanel() {
   const [catalog, setCatalog] = useState<Catalog | null>(null); const [connections, setConnections] = useState<DataRow[]>([]);
   const [provider, setProvider] = useState("github"); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [oauthMessage, setOauthMessage] = useState("");
@@ -113,17 +115,20 @@ export default function IntegrationsPanel() {
         {!records.length && <p>No current records on this page. The connection may be unconfigured, synchronizing, stale, or empty.</p>}
         <ul className="org-list">{records.map(r => <li key={String(r.id)}><div><Badge>{String(r.kind)}</Badge><h3>{String(r.title)}</h3>
           <p>{r.status ? String(r.status) : "Status not supplied"} · Observed {new Date(String(r.observed_at)).toLocaleString()}</p>
-          {r.amount !== null && <p>Recorded amount: {String(r.amount)} {r.currency ? String(r.currency) : "(currency not supplied)"}</p>}
+          {r.amount != null && <p>Recorded amount: {String(r.amount)} {r.currency ? String(r.currency) : "(currency not supplied)"}</p>}
           {r.department && <p>Department: {String(r.department)}. Supervisor reference: {String(r.supervisor_reference ?? "Not supplied")}.</p>}
           {r.metric && <p>{String(r.metric)}: {String(r.metric_value)} {String(r.metric_currency ?? r.unit)} · {String(r.period_start)} through {String(r.period_end)}. Campaign attribution: {String(r.campaign)}.</p>}
           {r.source_url && <a href={String(r.source_url)} target="_blank" rel="noreferrer">Open provider source</a>}
-          {["ISSUE", "TASK", "PULL_REQUEST", "MESSAGE"].includes(String(r.kind)) && <Button variant="secondary" disabled={busy} onClick={() => void action(() => startMapping(r))}>Link to project work</Button>}</div></li>)}</ul>
+          {shareableRecordKinds.includes(String(r.kind)) && <Button variant="secondary" disabled={busy} onClick={() => void action(() => startMapping(r))}>Share record with project work</Button>}</div></li>)}</ul>
         <div className="org-tabs"><Button variant="secondary" disabled={busy || !offset} onClick={() => void action(() => inspect(selected, offset - 100))}>Previous records</Button>
           <Button variant="secondary" disabled={busy || records.length < 100} onClick={() => void action(() => inspect(selected, offset + 100))}>Next records</Button></div>
         <DataTable title="Recent synchronization runs" rows={runs} columns={[["status", "Status"], ["records_seen", "Records observed"], ["started_at", "Started"], ["finished_at", "Finished"], ["error_code", "Error"]]} />
       </Card>}
-      {mapping && <Card><h2>Share work with a project</h2><p>{String(mapping.title)}</p>
-        <p>This shares a source snapshot with everyone who can read the selected project, including future project members. New tasks start as unassigned TODO work with no guessed effort or deadline. Linking does not edit existing tasks.</p>
+      {mapping && <Card><h2>Share a provider record with project work</h2><p><Badge>{String(mapping.kind)}</Badge> {String(mapping.title)}</p>
+        {mapping.amount != null && <p>Financial snapshot: {String(mapping.amount)} {mapping.currency ? String(mapping.currency) : "currency not supplied"}. The amount keeps its source currency; it is not converted or combined with other currencies.</p>}
+        {mapping.department && <p>Employee snapshot: {String(mapping.department)} department · supervisor {String(mapping.supervisor_reference ?? "not supplied")}.</p>}
+        {mapping.metric && <p>Marketing snapshot: {String(mapping.metric)} {String(mapping.metric_value)} {String(mapping.metric_currency ?? mapping.unit)} · {String(mapping.period_start)} through {String(mapping.period_end)} · campaign {String(mapping.campaign)}.</p>}
+        <p>Confirming shares this source snapshot with everyone who can read the selected project, including future project members. New tasks start as unassigned TODO work with no guessed effort or deadline. Linking does not edit existing tasks.</p>
         <form className="org-form" onSubmit={e => {
           e.preventDefault(); const body = Object.fromEntries(new FormData(e.currentTarget).entries());
           void action(async () => { await orgApi.mapSource(projectId, { recordId: mapping.id, taskId: body.taskId || null, rationale: body.rationale, shareWithProject: body.share === "on" }); setMapping(null); });
