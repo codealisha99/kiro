@@ -18,13 +18,18 @@ import org.springframework.stereotype.Component;
 public class ProviderGateway {
   public record MetricObservation(String metric,BigDecimal value,String unit,String start,String end,String campaign,String currency) {}
   public record SourceRecord(String externalId,String kind,String title,String status,String url,String updatedAt,
-      BigDecimal amount,String currency,String department,String supervisor,MetricObservation metric) {
+      BigDecimal amount,String currency,String department,String supervisor,MetricObservation metric,String content) {
+    public SourceRecord(String externalId,String kind,String title,String status,String url,String updatedAt,BigDecimal amount,String currency,String department,String supervisor,MetricObservation metric) {
+      this(externalId,kind,title,status,url,updatedAt,amount,currency,department,supervisor,metric,null);
+    }
     public SourceRecord(String externalId,String kind,String title,String status,String url,String updatedAt,BigDecimal amount,String currency,String department,String supervisor) {
-      this(externalId,kind,title,status,url,updatedAt,amount,currency,department,supervisor,null);
+      this(externalId,kind,title,status,url,updatedAt,amount,currency,department,supervisor,null,null);
     }
   }
   public record Page(List<SourceRecord> records,String nextCursor) {}
-  public record Reply(int status,String body,String retryAfter) {}
+  public record Reply(int status,String body,String retryAfter,byte[] rawBody) {
+    public Reply(int status,String body,String retryAfter) { this(status,body,retryAfter,body==null?new byte[0]:body.getBytes(StandardCharsets.UTF_8)); }
+  }
   public interface Transport { Reply send(HttpRequest request) throws Exception; }
   public static class ProviderFailure extends RuntimeException {
     public final String code; public final boolean retryable; public final int delaySeconds;
@@ -32,23 +37,30 @@ public class ProviderGateway {
   }
   private final ObjectMapper json; private final Transport transport;
   private final String xeroClientId,xeroClientSecret,xeroRedirectUri;
-  private final String googleClientId,googleClientSecret,googleRedirectUri;
+  private final String googleClientId,googleClientSecret,googleRedirectUri,driveClientId,driveClientSecret,driveRedirectUri;
   public record XeroTokens(String accessToken,String refreshToken,int expiresIn) {}
   public record GoogleTokens(String accessToken,String refreshToken,int expiresIn) {}
+  public record GoogleDriveTokens(String accessToken,String refreshToken,int expiresIn) {}
   public record XeroTenant(String tenantId,String tenantName) {}
   @Autowired public ProviderGateway(ObjectMapper json,@Value("${XERO_CLIENT_ID:}") String clientId,
       @Value("${XERO_CLIENT_SECRET:}") String clientSecret,@Value("${XERO_REDIRECT_URI:}") String redirectUri,
       @Value("${GOOGLE_ANALYTICS_CLIENT_ID:}") String googleId,@Value("${GOOGLE_ANALYTICS_CLIENT_SECRET:}") String googleSecret,
-      @Value("${GOOGLE_ANALYTICS_REDIRECT_URI:}") String googleRedirect) {
-    this(json,new HttpTransport(),clientId,clientSecret,redirectUri,googleId,googleSecret,googleRedirect);
+      @Value("${GOOGLE_ANALYTICS_REDIRECT_URI:}") String googleRedirect,
+      @Value("${GOOGLE_DRIVE_CLIENT_ID:}") String driveId,@Value("${GOOGLE_DRIVE_CLIENT_SECRET:}") String driveSecret,
+      @Value("${GOOGLE_DRIVE_REDIRECT_URI:}") String driveRedirect) {
+    this(json,new HttpTransport(),clientId,clientSecret,redirectUri,googleId,googleSecret,googleRedirect,driveId,driveSecret,driveRedirect);
   }
   ProviderGateway(ObjectMapper json,Transport transport) { this(json,transport,"","",""); }
   ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri) {
     this(json,transport,clientId,clientSecret,redirectUri,"","","");
   }
   ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri,String googleId,String googleSecret,String googleRedirect) {
+    this(json,transport,clientId,clientSecret,redirectUri,googleId,googleSecret,googleRedirect,"","","");
+  }
+  ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri,String googleId,String googleSecret,String googleRedirect,String driveId,String driveSecret,String driveRedirect) {
     this.json=json;this.transport=transport;this.xeroClientId=clientId;this.xeroClientSecret=clientSecret;this.xeroRedirectUri=redirectUri;
     this.googleClientId=googleId;this.googleClientSecret=googleSecret;this.googleRedirectUri=googleRedirect;
+    this.driveClientId=driveId;this.driveClientSecret=driveSecret;this.driveRedirectUri=driveRedirect;
   }
   public boolean xeroOAuthConfigured() {
     if(xeroClientId.isBlank()||xeroClientSecret.isBlank()||xeroRedirectUri.isBlank())return false;
@@ -71,6 +83,36 @@ public class ProviderGateway {
           +"&scope="+q("https://www.googleapis.com/auth/analytics.readonly")+"&access_type=offline&include_granted_scopes=true&prompt=consent&state="+q(state)
           +"&code_challenge="+q(challenge)+"&code_challenge_method=S256";
     } catch(Exception e){throw new IllegalStateException("Could not prepare Google Analytics authorization");}
+  }
+  public boolean googleDriveOAuthConfigured() { return validOAuthClient(driveClientId,driveClientSecret,driveRedirectUri); }
+  public String googleDriveAuthorizationUrl(String state,String verifier) {
+    if(!googleDriveOAuthConfigured())throw new ProviderFailure("GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      String challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+      return "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id="+q(driveClientId)+"&redirect_uri="+q(driveRedirectUri)
+          +"&scope="+q("https://www.googleapis.com/auth/drive.readonly")+"&access_type=offline&include_granted_scopes=true&prompt=consent&state="+q(state)
+          +"&code_challenge="+q(challenge)+"&code_challenge_method=S256";
+    } catch(Exception e){throw new IllegalStateException("Could not prepare Google Drive authorization");}
+  }
+  public GoogleDriveTokens exchangeGoogleDriveCode(String code,String verifier) { return driveTokenRequest(Map.of("grant_type","authorization_code","code",code,"redirect_uri",driveRedirectUri,"code_verifier",verifier),false,null); }
+  public GoogleDriveTokens refreshGoogleDriveToken(String refreshToken) { return driveTokenRequest(Map.of("grant_type","refresh_token","refresh_token",refreshToken),true,refreshToken); }
+  private GoogleDriveTokens driveTokenRequest(Map<String,String> fields,boolean refresh,String existingRefreshToken) {
+    if(!googleDriveOAuthConfigured())throw new ProviderFailure("GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      var form=new HashMap<>(fields);form.put("client_id",driveClientId);form.put("client_secret",driveClientSecret);
+      String body=form.entrySet().stream().map(e->q(e.getKey())+"="+q(e.getValue())).collect(java.util.stream.Collectors.joining("&"));
+      var req=HttpRequest.newBuilder(URI.create("https://oauth2.googleapis.com/token")).timeout(Duration.ofSeconds(20))
+          .header("Accept","application/json").header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body)).build();
+      Reply reply=transport.send(req);
+      if(reply.status()<200||reply.status()>=300)throw new ProviderFailure(refresh?(reply.status()==400?"GOOGLE_DRIVE_REFRESH_REAUTH":"GOOGLE_DRIVE_REFRESH_OUTCOME_UNKNOWN"):"GOOGLE_DRIVE_OAUTH_EXCHANGE_FAILED",false,0);
+      JsonNode token=json.readTree(reply.body());String access=required(token,"access_token");int expiry=token.path("expires_in").asInt(0);
+      String rotated=text(token,"refresh_token"),refreshToken=rotated==null||rotated.isBlank()?existingRefreshToken:rotated;
+      if(expiry<1||refreshToken==null||refreshToken.isBlank())throw new ProviderFailure(refresh?"GOOGLE_DRIVE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_DRIVE_REFRESH_TOKEN_MISSING",false,0);
+      if(!refresh&&!Arrays.asList(required(token,"scope").split("\\s+")).contains("https://www.googleapis.com/auth/drive.readonly"))throw new ProviderFailure("GOOGLE_DRIVE_SCOPE_NOT_GRANTED",false,0);
+      return new GoogleDriveTokens(access,refreshToken,expiry);
+    } catch(ProviderFailure e){throw e;}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new ProviderFailure(refresh?"GOOGLE_DRIVE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_DRIVE_OAUTH_EXCHANGE_FAILED",false,0);}
+    catch(Exception e){throw new ProviderFailure(refresh?"GOOGLE_DRIVE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_DRIVE_OAUTH_EXCHANGE_FAILED",false,0);}
   }
   public GoogleTokens exchangeGoogleAnalyticsCode(String code,String verifier) {
     return googleTokenRequest(Map.of("grant_type","authorization_code","code",code,"redirect_uri",googleRedirectUri,"code_verifier",verifier),false,null);
@@ -139,7 +181,7 @@ public class ProviderGateway {
       var future=client.sendAsync(request,info->new BoundedBody());
       try {
         var r=future.get(25,java.util.concurrent.TimeUnit.SECONDS);
-        return new Reply(r.statusCode(),new String(r.body(),StandardCharsets.UTF_8),r.headers().firstValue("Retry-After").orElse("60"));
+        return new Reply(r.statusCode(),new String(r.body(),StandardCharsets.UTF_8),r.headers().firstValue("Retry-After").orElse("60"),r.body());
       } catch(java.util.concurrent.TimeoutException e) {
         future.cancel(true);throw new ProviderFailure("PROVIDER_TIMEOUT",true,60);
       } catch(java.util.concurrent.ExecutionException e) {
@@ -156,7 +198,7 @@ public class ProviderGateway {
     public void onSubscribe(java.util.concurrent.Flow.Subscription s) { subscription=s;s.request(1); }
     public void onNext(List<java.nio.ByteBuffer> chunks) {
       for(var chunk:chunks) {
-        if(bytes.size()+chunk.remaining()>2_000_000) { subscription.cancel();result.completeExceptionally(new ProviderFailure("RESPONSE_TOO_LARGE",false,0));return; }
+        if(bytes.size()+chunk.remaining()>10_000_000) { subscription.cancel();result.completeExceptionally(new ProviderFailure("RESPONSE_TOO_LARGE",false,0));return; }
         byte[] data=new byte[chunk.remaining()];chunk.get(data);bytes.writeBytes(data);
       }
       subscription.request(1);
@@ -170,6 +212,7 @@ public class ProviderGateway {
       case "slack" -> resource.matches("C[A-Z0-9]{5,}") && account.matches("[a-z0-9][a-z0-9-]{0,62}");
       case "linear","xero" -> resource.matches("[0-9a-fA-F-]{36}");
       case "hubspot","googleanalytics" -> resource.matches("[0-9]{1,20}");
+      case "googledrive" -> resource.matches("[A-Za-z0-9_-]{10,200}");
       case "bamboohr" -> resource.matches("[a-z0-9][a-z0-9-]{0,62}");
       default -> false;
     };
@@ -204,11 +247,44 @@ public class ProviderGateway {
     catch(InterruptedException e) { Thread.currentThread().interrupt();throw new ProviderFailure("REQUEST_INTERRUPTED",true,60); }
     catch(Exception e) { throw new ProviderFailure("PROVIDER_UNAVAILABLE",true,60); }
   }
+  private String requestText(String url,String auth) {
+    try {
+      var req=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(25)).header("Authorization",auth).header("Accept","text/plain").GET().build();
+      Reply reply=transport.send(req);
+      if(reply.status()==429||reply.status()>=500)throw new ProviderFailure("PROVIDER_HTTP_"+reply.status(),true,60);
+      if(reply.status()<200||reply.status()>=300)throw new ProviderFailure("PROVIDER_HTTP_"+reply.status(),false,0);
+      return reply.body();
+    } catch(ProviderFailure e){throw e;}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new ProviderFailure("REQUEST_INTERRUPTED",true,60);}
+    catch(Exception e){throw new ProviderFailure("PROVIDER_UNAVAILABLE",true,60);}
+  }
+  private byte[] requestBytes(String url,String auth) {
+    try {
+      var req=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(25)).header("Authorization",auth).GET().build();
+      Reply reply=transport.send(req);
+      if(reply.status()==429||reply.status()>=500)throw new ProviderFailure("PROVIDER_HTTP_"+reply.status(),true,60);
+      if(reply.status()<200||reply.status()>=300)throw new ProviderFailure("PROVIDER_HTTP_"+reply.status(),false,0);
+      if(reply.rawBody().length>10_000_000)throw new ProviderFailure("RESPONSE_TOO_LARGE",false,0);
+      return reply.rawBody();
+    } catch(ProviderFailure e){throw e;}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new ProviderFailure("REQUEST_INTERRUPTED",true,60);}
+    catch(Exception e){throw new ProviderFailure("PROVIDER_UNAVAILABLE",true,60);}
+  }
+  private String extractPdf(byte[] bytes) {
+    try(var pdf=org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
+      var stripper=new org.apache.pdfbox.text.PDFTextStripper();stripper.setEndPage(Math.min(pdf.getNumberOfPages(),100));
+      String text=stripper.getText(pdf);
+      if(text==null||text.isBlank())throw new ProviderFailure("PDF_HAS_NO_EXTRACTABLE_TEXT",false,0);
+      return text;
+    } catch(ProviderFailure e){throw e;}
+    catch(Exception e){throw new ProviderFailure("PDF_EXTRACTION_FAILED",false,0);}
+  }
   private static String text(JsonNode n,String field) { var v=n.path(field);return v.isMissingNode()||v.isNull()?null:v.asText(); }
   private static String required(JsonNode n,String field) {
     String v=text(n,field);if(v==null || v.isBlank()) throw new ProviderFailure("INVALID_PROVIDER_RESPONSE",false,0);return v;
   }
   private static JsonNode array(JsonNode n) { if(!n.isArray()) throw new ProviderFailure("INVALID_PROVIDER_RESPONSE",false,0);return n; }
+  private JsonNode arrayOrEmpty(JsonNode n) { return n.isArray()?n:json.createArrayNode(); }
   private static BigDecimal amount(String n) {
     if(n==null||n.isBlank())return null;
     try {return new BigDecimal(n);}catch(NumberFormatException e){throw new ProviderFailure("INVALID_AMOUNT",false,0);}
@@ -217,10 +293,53 @@ public class ProviderGateway {
     try { var uri=URI.create(value);return "https".equals(uri.getScheme())&&host.equals(uri.getHost())?value:null; }
     catch(Exception e) {return null;}
   }
+  private static String safeDriveUrl(String value) {
+    try { var uri=URI.create(value);return "https".equals(uri.getScheme())&&Set.of("drive.google.com","docs.google.com").contains(uri.getHost())?value:null; }
+    catch(Exception e) {return null;}
+  }
   public Page fetch(String provider,String resource,String account,String token,String cursor) {
     validate(provider,resource,account);
     List<SourceRecord> records=new ArrayList<>(); String next=null;String bearer="Bearer "+token;
     switch(provider) {
+      case "googledrive" -> {
+        String folder=resource,pageToken=null;var queued=new ArrayList<String>();
+        if(cursor!=null) try {
+          var state=json.readTree(cursor);folder=required(state,"folder");pageToken=text(state,"pageToken");
+          for(var item:array(state.path("queued")))queued.add(item.asText());
+        } catch(ProviderFailure e){throw e;} catch(Exception e){throw new ProviderFailure("INVALID_CURSOR",false,0);}
+        String query="'"+folder+"' in parents and trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.document' or mimeType = 'application/vnd.google-apps.spreadsheet' or mimeType = 'application/vnd.google-apps.presentation' or mimeType = 'application/pdf' or mimeType = 'text/plain')";
+        String url="https://www.googleapis.com/drive/v3/files?pageSize=5&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,description,capabilities(canDownload))&q="+q(query)+(pageToken==null?"":"&pageToken="+q(pageToken));
+        var result=request(url,bearer,null,Map.of());
+        for(var file:array(result.path("files"))) {
+          String fileId=required(file,"id"),mime=text(file,"mimeType");
+          if("application/vnd.google-apps.folder".equals(mime)) { queued.add(fileId); continue; }
+          if(!file.path("capabilities").path("canDownload").asBoolean())continue;
+          String exportMime=switch(mime) {
+            case "application/vnd.google-apps.document","application/vnd.google-apps.presentation" -> "text/plain";
+            case "application/vnd.google-apps.spreadsheet" -> "text/csv";
+            default -> null;
+          };
+          String content;
+          if("application/pdf".equals(mime)) {
+            try { content=extractPdf(requestBytes("https://www.googleapis.com/drive/v3/files/"+q(fileId)+"?alt=media",bearer)); }
+            catch(ProviderFailure failure) {
+              if(Set.of("PDF_HAS_NO_EXTRACTABLE_TEXT","PDF_EXTRACTION_FAILED").contains(failure.code))continue;
+              throw failure;
+            }
+          } else content=exportMime!=null
+              ?requestText("https://www.googleapis.com/drive/v3/files/"+q(fileId)+"/export?mimeType="+q(exportMime),bearer)
+              :requestText("https://www.googleapis.com/drive/v3/files/"+q(fileId)+"?alt=media",bearer);
+          String description=text(file,"description");if(description!=null&&!description.isBlank())content=description+"\n\n"+content;
+          content=bounded(content);
+          records.add(new SourceRecord(fileId,"DOCUMENT",required(file,"name"),"AVAILABLE",safeDriveUrl(text(file,"webViewLink")),text(file,"modifiedTime"),null,null,null,null,null,content));
+        }
+        String providerNext=text(result,"nextPageToken");
+        if(providerNext!=null) {
+          var state=json.createObjectNode().put("folder",folder).put("pageToken",providerNext);var qf=state.putArray("queued");queued.forEach(qf::add);next=state.toString();
+        } else if(!queued.isEmpty()) {
+          var state=json.createObjectNode().put("folder",queued.removeFirst());var qf=state.putArray("queued");queued.forEach(qf::add);next=state.toString();
+        }
+      }
       case "googleanalytics" -> {
         // Freeze absolute date bounds in the cursor so pages crossing midnight use the same report.
         var end=java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(2);
@@ -255,10 +374,16 @@ public class ProviderGateway {
       }
       case "github" -> {
         int page=cursor==null?1:Integer.parseInt(cursor);
-        var rows=array(request("https://api.github.com/repos/"+resource+"/issues?state=all&per_page=100&sort=created&direction=asc&page="+page,
+        var rows=array(request("https://api.github.com/repos/"+resource+"/issues?state=all&per_page=8&sort=created&direction=asc&page="+page,
           bearer,null,Map.of("X-GitHub-Api-Version","2022-11-28")));
-        for(var r:rows) records.add(new SourceRecord(required(r,"id"),r.has("pull_request")?"PULL_REQUEST":"ISSUE",required(r,"title"),text(r,"state"),safeUrl(text(r,"html_url"),"github.com"),text(r,"updated_at"),null,null,null,null));
-        if(rows.size()==100)next=String.valueOf(page+1);
+        for(var r:rows) {
+          String number=required(r,"number");StringBuilder content=new StringBuilder(bounded(Objects.requireNonNullElse(text(r,"body"),"")));
+          var comments=r.path("comments").asInt(0)>0?array(request("https://api.github.com/repos/"+resource+"/issues/"+number+"/comments?per_page=100",bearer,null,Map.of("X-GitHub-Api-Version","2022-11-28"))):json.createArrayNode();
+          for(var comment:comments) appendBounded(content,"\n\nComment by "+Objects.requireNonNullElse(text(comment.path("user"),"login"),"unknown author")
+              +" ("+Objects.requireNonNullElse(text(comment,"created_at"),"date unavailable")+"):\n"+Objects.requireNonNullElse(text(comment,"body"),""));
+          records.add(new SourceRecord(required(r,"id"),r.has("pull_request")?"PULL_REQUEST":"ISSUE",required(r,"title"),text(r,"state"),safeUrl(text(r,"html_url"),"github.com"),text(r,"updated_at"),null,null,null,null,null,content.toString()));
+        }
+        if(rows.size()==8)next=String.valueOf(page+1);
       }
       case "slack" -> {
         if(!token.startsWith("xoxb-"))throw new ProviderFailure("SLACK_BOT_TOKEN_REQUIRED",false,0);
@@ -266,10 +391,12 @@ public class ProviderGateway {
         var channel=info.path("channel");
         if(!channel.path("is_channel").asBoolean() || channel.path("is_private").asBoolean() || !channel.path("is_member").asBoolean())
           throw new ProviderFailure("PUBLIC_JOINED_CHANNEL_REQUIRED",false,0);
-        var result=request("https://slack.com/api/conversations.history?limit=15&channel="+q(resource)+(cursor==null?"":"&cursor="+q(cursor)),bearer,null,Map.of());slackOk(result);
+        var result=request("https://slack.com/api/conversations.history?limit=5&channel="+q(resource)+(cursor==null?"":"&cursor="+q(cursor)),bearer,null,Map.of());slackOk(result);
         for(var r:array(result.path("messages"))) {
-          String ts=required(r,"ts");records.add(new SourceRecord(ts,"MESSAGE",Objects.requireNonNullElse(text(r,"text"),""),"OBSERVED",
-            "https://"+account+".slack.com/archives/"+resource+"/p"+ts.replace(".",""),ts,null,null,null,null));
+          String ts=required(r,"ts");StringBuilder content=new StringBuilder(bounded(Objects.requireNonNullElse(text(r,"text"),"")));
+          if(r.path("reply_count").asInt(0)>0) appendSlackThread(content,resource,ts,bearer);
+          records.add(new SourceRecord(ts,"MESSAGE",Objects.requireNonNullElse(text(r,"text"),""),"OBSERVED",
+            "https://"+account+".slack.com/archives/"+resource+"/p"+ts.replace(".",""),ts,null,null,null,null,null,content.toString()));
         }
         next=result.path("response_metadata").path("next_cursor").asText("");
         if(result.path("has_more").asBoolean() && next.isBlank()) throw new ProviderFailure("MISSING_PROVIDER_CURSOR",false,0);
@@ -277,11 +404,16 @@ public class ProviderGateway {
       case "linear" -> {
         try {
           Map<String,Object> variables=new HashMap<>();variables.put("team",resource);variables.put("after",cursor);
-          String body=json.writeValueAsString(Map.of("query","query($team: ID!, $after: String) { team(id: $team) { issues(first: 100, after: $after, includeArchived: false) { nodes { id title url updatedAt state { name } } pageInfo { hasNextPage endCursor } } } }","variables",variables));
+          String body=json.writeValueAsString(Map.of("query","query($team: ID!, $after: String) { team(id: $team) { issues(first: 100, after: $after, includeArchived: false) { nodes { id title description url updatedAt state { name } comments(first: 100) { nodes { body createdAt user { name } } } } pageInfo { hasNextPage endCursor } } } }","variables",variables));
           var result=request("https://api.linear.app/graphql",token,body,Map.of());
           if(result.has("errors")) throw new ProviderFailure("LINEAR_GRAPHQL_ERROR",false,0);
           var issues=result.path("data").path("team").path("issues");
-          for(var r:array(issues.path("nodes")))records.add(new SourceRecord(required(r,"id"),"TASK",required(r,"title"),text(r.path("state"),"name"),safeUrl(text(r,"url"),"linear.app"),text(r,"updatedAt"),null,null,null,null));
+          for(var r:array(issues.path("nodes"))) {
+            StringBuilder content=new StringBuilder(bounded(Objects.requireNonNullElse(text(r,"description"),"")));
+            for(var comment:arrayOrEmpty(r.path("comments").path("nodes")))appendBounded(content,"\n\nComment by "+Objects.requireNonNullElse(text(comment.path("user"),"name"),"unknown author")
+                +" ("+Objects.requireNonNullElse(text(comment,"createdAt"),"date unavailable")+"):\n"+Objects.requireNonNullElse(text(comment,"body"),""));
+            records.add(new SourceRecord(required(r,"id"),"TASK",required(r,"title"),text(r.path("state"),"name"),safeUrl(text(r,"url"),"linear.app"),text(r,"updatedAt"),null,null,null,null,null,content.toString()));
+          }
           if(issues.path("pageInfo").path("hasNextPage").asBoolean())next=required(issues.path("pageInfo"),"endCursor");
         }catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
       }
@@ -317,5 +449,29 @@ public class ProviderGateway {
       String code=result.path("error").asText();
       throw new ProviderFailure(code.equals("ratelimited")?"PROVIDER_HTTP_429":"SLACK_AUTH_OR_SCOPE_ERROR",code.equals("ratelimited"),60);
     }
+  }
+  private void appendSlackThread(StringBuilder content,String channel,String ts,String bearer) {
+    String cursor=null;int pages=0;
+    do {
+      var result=request("https://slack.com/api/conversations.replies?limit=100&channel="+q(channel)+"&ts="+q(ts)+(cursor==null?"":"&cursor="+q(cursor)),bearer,null,Map.of());
+      slackOk(result);
+      for(var reply:array(result.path("messages"))) {
+        String replyTs=required(reply,"ts");if(replyTs.equals(ts))continue;
+        appendBounded(content,"\n\nThread reply ("+replyTs+"):\n"+Objects.requireNonNullElse(text(reply,"text"),""));
+      }
+      cursor=result.path("response_metadata").path("next_cursor").asText("");
+      if(cursor.isBlank())cursor=null;
+      if(++pages>=10&&cursor!=null)throw new ProviderFailure("SLACK_THREAD_TOO_LARGE",false,0);
+    } while(cursor!=null);
+  }
+  private static final int MAX_RECORD_CONTENT=200_000;
+  private static String bounded(String value) {
+    return value.length()<=MAX_RECORD_CONTENT?value:value.substring(0,MAX_RECORD_CONTENT)+"\n[Remaining source text omitted from this snapshot]";
+  }
+  private static void appendBounded(StringBuilder target,String value) {
+    if(target.length()>=MAX_RECORD_CONTENT)return;
+    int remaining=MAX_RECORD_CONTENT-target.length();
+    if(value.length()<=remaining)target.append(value);
+    else target.append(value,0,remaining).append("\n[Remaining source text omitted from this snapshot]");
   }
 }

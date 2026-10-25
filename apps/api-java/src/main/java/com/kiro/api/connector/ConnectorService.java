@@ -30,6 +30,8 @@ public class ConnectorService {
   public Map<String, Object> sync(String tenantId, String sourceId, AuthenticatedPrincipal user) {
     var source = sources.findFirstByIdAndTenantIdAndDeletedFalse(sourceId, tenantId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Source not found"));
+    if ("PROVIDER".equals(source.getType())) throw new ResponseStatusException(HttpStatus.CONFLICT,
+        "Provider sources are synchronized from Connected applications");
     Connector connector = connectors.stream()
         .filter(c -> c.type().equalsIgnoreCase(source.getType()))
         .findFirst()

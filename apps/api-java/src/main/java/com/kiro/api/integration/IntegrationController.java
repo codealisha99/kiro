@@ -34,6 +34,7 @@ public class IntegrationController {
   @DeleteMapping("/{id}/data") public void deleteData(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { service.deleteData(u,id); }
   @PostMapping("/{id}/xero/authorize") public Object authorizeXero(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.startXeroOAuth(u,id); }
   @PostMapping("/{id}/googleanalytics/authorize") public Object authorizeGoogleAnalytics(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.startGoogleAnalyticsOAuth(u,id); }
+  @PostMapping("/{id}/googledrive/authorize") public Object authorizeGoogleDrive(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.startGoogleDriveOAuth(u,id); }
   @GetMapping("/{id}/xero/tenants") public Object xeroTenants(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.xeroTenants(u,id); }
   public record XeroTenantInput(@jakarta.validation.constraints.NotBlank String tenantId) {}
   @PostMapping("/{id}/xero/tenant") public Object selectXeroTenant(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@jakarta.validation.Valid @RequestBody XeroTenantInput body) { return service.selectXeroTenant(u,id,body.tenantId()); }
@@ -44,6 +45,10 @@ public class IntegrationController {
   @GetMapping("/googleanalytics/callback") public ResponseEntity<Void> googleAnalyticsCallback(@RequestParam(required=false) String state,@RequestParam(required=false) String code,@RequestParam(required=false) String error) {
     boolean success=false;try { service.completeGoogleAnalyticsOAuth(state,error==null?code:null);success=true; } catch(org.springframework.web.server.ResponseStatusException ignored) { }
     return oauthRedirect("googleanalytics",success);
+  }
+  @GetMapping("/googledrive/callback") public ResponseEntity<Void> googleDriveCallback(@RequestParam(required=false) String state,@RequestParam(required=false) String code,@RequestParam(required=false) String error) {
+    boolean success=false;try { service.completeGoogleDriveOAuth(state,error==null?code:null);success=true; } catch(org.springframework.web.server.ResponseStatusException ignored) { }
+    return oauthRedirect("googledrive",success);
   }
   @PostMapping("/xero/webhook") public ResponseEntity<Void> xeroWebhook(HttpServletRequest request,@RequestHeader(value="x-xero-signature",required=false) String signature) throws java.io.IOException {
     if(request.getContentLengthLong()>XeroWebhookService.MAX_BODY_BYTES)throw new org.springframework.web.server.ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Xero webhook payload is too large");

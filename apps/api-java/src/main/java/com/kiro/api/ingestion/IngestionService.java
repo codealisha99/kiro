@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Service
 public class IngestionService {
@@ -34,6 +35,7 @@ public class IngestionService {
   private final IngestJobService queue;
   private final DocumentStorage storage;
   private final com.kiro.api.user.UserService users;
+  private final JdbcTemplate jdbc;
 
   public IngestionService(
       com.kiro.api.domain.SourceRepository sources,
@@ -45,7 +47,8 @@ public class IngestionService {
       ParserService parser,
       IngestJobService queue,
       DocumentStorage storage,
-      com.kiro.api.user.UserService users) {
+      com.kiro.api.user.UserService users,
+      JdbcTemplate jdbc) {
     this.sources = sources;
     this.documents = documents;
     this.versions = versions;
@@ -56,6 +59,7 @@ public class IngestionService {
     this.queue = queue;
     this.storage = storage;
     this.users = users;
+    this.jdbc = jdbc;
   }
 
   // ---- sources ----
@@ -64,6 +68,9 @@ public class IngestionService {
     List<Map<String, Object>> out = new ArrayList<>();
     List<Document> visible = documents.findVisible(user.tenantId(), user.id(), user.roleUpper());
     for (var s : sources.findByTenantIdAndDeletedFalseOrderByCreatedAtAsc(user.tenantId())) {
+      if ("PROVIDER".equals(s.getType()) && jdbc.queryForObject(
+          "SELECT count(*) FROM provider_connections WHERE tenant_id=? AND provider_source_id=? AND owner_id=? AND status<>'DELETED'",
+          Long.class, user.tenantId(), s.getId(), user.id()) == 0) continue;
       long count = visible.stream()
           .filter(d -> d.getSourceId().equals(s.getId())).count();
       var m = new java.util.LinkedHashMap<String, Object>();
@@ -98,6 +105,8 @@ public class IngestionService {
   public Map<String, Boolean> deleteSource(AuthenticatedPrincipal user, String id) {
     var source = sources.findFirstByIdAndTenantIdAndDeletedFalse(id, user.tenantId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Source not found"));
+    if ("PROVIDER".equals(source.getType())) throw new ResponseStatusException(HttpStatus.CONFLICT,
+        "Disconnect or delete this source from Connected applications");
     source.setDeleted(true);
     source.setStatus("DISCONNECTED");
     sources.save(source);
