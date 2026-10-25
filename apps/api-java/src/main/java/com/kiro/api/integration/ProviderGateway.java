@@ -13,8 +13,13 @@ import org.springframework.stereotype.Component;
 /** Read-only official API adapters. Imported text is data, never executable instructions. */
 @Component
 public class ProviderGateway {
+  public record MetricObservation(String metric,BigDecimal value,String unit,String start,String end,String campaign,String currency) {}
   public record SourceRecord(String externalId,String kind,String title,String status,String url,String updatedAt,
-      BigDecimal amount,String currency,String department,String supervisor) {}
+      BigDecimal amount,String currency,String department,String supervisor,MetricObservation metric) {
+    public SourceRecord(String externalId,String kind,String title,String status,String url,String updatedAt,BigDecimal amount,String currency,String department,String supervisor) {
+      this(externalId,kind,title,status,url,updatedAt,amount,currency,department,supervisor,null);
+    }
+  }
   public record Page(List<SourceRecord> records,String nextCursor) {}
   public record Reply(int status,String body,String retryAfter) {}
   public interface Transport { Reply send(HttpRequest request) throws Exception; }
@@ -61,7 +66,7 @@ public class ProviderGateway {
       case "github" -> resource.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+") && !resource.contains("..");
       case "slack" -> resource.matches("C[A-Z0-9]{5,}") && account.matches("[a-z0-9][a-z0-9-]{0,62}");
       case "linear","xero" -> resource.matches("[0-9a-fA-F-]{36}");
-      case "hubspot" -> resource.matches("[0-9]{1,20}");
+      case "hubspot","googleanalytics" -> resource.matches("[0-9]{1,20}");
       case "bamboohr" -> resource.matches("[a-z0-9][a-z0-9-]{0,62}");
       default -> false;
     };
@@ -113,6 +118,38 @@ public class ProviderGateway {
     validate(provider,resource,account);
     List<SourceRecord> records=new ArrayList<>(); String next=null;String bearer="Bearer "+token;
     switch(provider) {
+      case "googleanalytics" -> {
+        // Freeze absolute date bounds in the cursor so pages crossing midnight use the same report.
+        var end=java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(2);
+        var start=end.minusDays(29);int offset=0;
+        if(cursor!=null) {
+          var parts=cursor.split(":");if(parts.length!=3)throw new ProviderFailure("INVALID_CURSOR",false,0);
+          start=java.time.LocalDate.parse(parts[0]);end=java.time.LocalDate.parse(parts[1]);offset=Integer.parseInt(parts[2]);
+          if(offset<0 || end.isBefore(start))throw new ProviderFailure("INVALID_CURSOR",false,0);
+        }
+        var body=json.createObjectNode();body.putArray("dateRanges").addObject().put("startDate",start.toString()).put("endDate",end.toString());
+        body.putArray("dimensions").addObject().put("name","firstUserCampaignName");
+        var names=List.of("sessions","keyEvents","totalRevenue");var metrics=body.putArray("metrics");names.forEach(n->metrics.addObject().put("name",n));
+        body.put("limit","100").put("offset",String.valueOf(offset));
+        body.putArray("orderBys").addObject().putObject("dimension").put("dimensionName","firstUserCampaignName");
+        var report=request("https://analyticsdata.googleapis.com/v1beta/properties/"+resource+":runReport",bearer,body.toString(),Map.of());
+        int total=report.path("rowCount").asInt(-1);if(total<0)throw new ProviderFailure("INVALID_PROVIDER_RESPONSE",false,0);
+        var rows=report.path("rows");if(total==0 && rows.isMissingNode())rows=json.createArrayNode();
+        for(var row:array(rows)) {
+          String campaign=required(array(row.path("dimensionValues")).path(0),"value");var values=array(row.path("metricValues"));
+          if(values.size()!=3)throw new ProviderFailure("INVALID_PROVIDER_RESPONSE",false,0);
+          for(int n=0;n<3;n++) {
+            String metric=names.get(n);BigDecimal value=amount(required(values.path(n),"value"));String currency=n==2?text(report.path("metadata"),"currencyCode"):null;
+            var observation=new MetricObservation(metric,value,n==2?"currency":n==1?"events":"sessions",start.toString(),end.toString(),campaign,currency);
+            String external=json.createArrayNode().add(start.toString()).add(end.toString()).add(campaign).add(metric).toString();
+            records.add(new SourceRecord(external,"MARKETING_METRIC",campaign+" · "+metric,"REPORTED","https://analytics.google.com/analytics/web/#/p"+resource,null,null,null,null,null,observation));
+          }
+        }
+        if(offset+rows.size()<total) {
+          if(rows.isEmpty())throw new ProviderFailure("EMPTY_PROVIDER_PAGE",false,0);
+          next=start+":"+end+":"+(offset+rows.size());
+        }
+      }
       case "github" -> {
         int page=cursor==null?1:Integer.parseInt(cursor);
         var rows=array(request("https://api.github.com/repos/"+resource+"/issues?state=all&per_page=100&sort=created&direction=asc&page="+page,

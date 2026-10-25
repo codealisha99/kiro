@@ -179,6 +179,9 @@ class WorkPostgresTest {
   @Test void comparisonsRequireSameProjectPeriodAndCurrentAccess() {
     String p=project("Planning"),other=project("Other");
     String a=scenario(p,"First"),b=scenario(p,"Second"),foreign=scenario(other,"Other");
+    var readTx=new TransactionTemplate(tx.getTransactionManager());readTx.setReadOnly(true);
+    assertEquals(2,readTx.execute(t->work.scenarioList(owner,p)).size());
+    assertEquals(2,readTx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(List.of(a,b)))).size());
     assertEquals(2,tx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(List.of(a,b)))).size());
     for(var ids:List.of(List.of(a,a),List.of(a,foreign)))
       assertThrows(ResponseStatusException.class,()->tx.execute(t->work.compareScenarios(owner,p,new ScenarioCompareInput(ids))));

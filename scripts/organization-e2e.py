@@ -79,19 +79,44 @@ assert call("/work/insights", people["MANAGER"][1]) == []
 call("/organization/bindings", token, "POST", {"roleId": roles["MANAGER"], "userId": people["MANAGER"][0], "scope": "TEAM", "teamId": team})
 for provider, resource, account in [("github", "example/repo", ""), ("slack", "C123456", "example"),
                                   ("linear", "12345678-1234-1234-1234-123456789012", ""), ("hubspot", "123", ""),
-                                  ("xero", "12345678-1234-1234-1234-123456789012", ""), ("bamboohr", "example", "")]:
+                                  ("xero", "12345678-1234-1234-1234-123456789012", ""), ("bamboohr", "example", ""), ("googleanalytics", "123", "")]:
     c = call("/integrations", token, "POST", {"provider": provider, "name": "Synthetic " + provider, "resource": resource, "accountId": account})
     assert c["status"] == "UNCONFIGURED"
     assert "encrypted_token" not in c
     assert call("/integrations/" + c["id"] + "/sync", token, "POST")["status"] == "UNCONFIGURED"
     assert call("/integrations/" + c["id"] + "/records", token) == []
     call("/integrations/" + c["id"] + "/records", people["CEO"][1], expected=403)
-assert len(call("/integrations", token)) == 6
+assert len(call("/integrations", token)) == 7
 assert any(e["kind"] == "ROLE_REVOKED" for e in call("/organization/audit", token))
+project = projects[0]
+assert call("/work/projects/" + project + "/scenarios", token) == []
+planning = "/work/projects/" + project + "/planning"
+goal = call(planning + "/goals", token, "POST", {"name": "Synthetic adoption goal", "unit": "customers", "target": 10,
+    "observed": 2, "dueDate": "2027-01-31", "rationale": "Synthetic measured count", "expectedVersion": 0})
+initiative = call(planning + "/initiatives", token, "POST", {"name": "Synthetic launch", "goalId": goal["id"], "outcome": "Test adoption"})
+milestone = call(planning + "/milestones", token, "POST", {"name": "Synthetic release", "initiativeId": initiative["id"], "dueDate": "2027-01-15"})
+task_id = call("/work/projects/" + project, token)["tasks"][0]["id"]
+call(planning + "/tasks/" + task_id, token, "PUT", {"parentTaskId": None, "milestoneId": milestone["id"], "priority": "HIGH", "requiredSkill": "Java", "expectedVersion": 0})
+call(planning + "/skills", token, "POST", {"userId": people["EMPLOYEE"][0], "skill": "Java", "evidence": "Synthetic verified capability"})
+call(planning + "/availability", token, "POST", {"userId": people["EMPLOYEE"][0], "start": "2027-01-01", "end": "2027-01-31", "hours": 20, "rationale": "Synthetic planning allocation"})
+assert len(call(planning, people["EMPLOYEE"][1])["goals"]) == 1
+assert len(call(planning + "/capacity?start=2027-01-01&end=2027-01-31", token)["milestones"]) == 1
+graph = call("/organization/graph", people["MANAGER"][1])
+assert any(n["type"] == "goal" and n["name"] == "Synthetic adoption goal" for n in graph["nodes"])
+assert len(call("/organization/metrics?weeks=4", people["MANAGER"][1])["weekly"]) == 4
+github = next(c for c in call("/integrations", token) if c["provider"] == "github")
+actions = "/work/projects/" + project + "/actions"
+proposal = call(actions, token, "POST", {"connectionId": github["id"], "title": "Synthetic proposed issue", "body": "No external request in this test.", "rationale": "Verify review gates", "confirmExternalSharing": True})
+decision = actions + "/" + proposal["id"] + "/decision"
+call(decision, token, "POST", {"expectedVersion": 1, "approve": True, "reason": "Self review denied"}, expected=403)
+call(decision, people["EMPLOYEE"][1], "POST", {"expectedVersion": 1, "approve": True, "reason": "Read only denied"}, expected=403)
+call(decision, people["MANAGER"][1], "POST", {"expectedVersion": 1, "approve": True, "reason": "Synthetic independent review"})
+call(actions + "/" + proposal["id"] + "/execute", token, "POST", {"expectedVersion": 2, "confirmExecution": True}, expected=409)
+assert call(actions, token)[0]["status"] == "APPROVED"
 # Optional ephemeral browser QA handoff, outside the repository. Never print tokens or passwords.
 if os.environ.get("ORG_E2E_BROWSER_HANDOFF"):
     path = os.environ["ORG_E2E_BROWSER_HANDOFF"]
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as output:
         json.dump({"email": email, "password": password, "suffix": suffix}, output)
-print("PASS: five role dashboards, scoped project access, restricted records, reporting cycles, role revocation, six unconfigured provider flows and audit history")
+print("PASS: five role dashboards, scoped access, reporting cycles, revocation, seven unconfigured providers, planning, graph, historical metrics, independent action approval and blocked credential-free execution")

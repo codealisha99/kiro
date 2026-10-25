@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Card, Field, Input, Select } from "@/components/u
 import { request } from "@/lib/api";
 import { orgApi, type DashboardData, type DashboardView, type DataRow, type OrgRole, type OrgSetup } from "@/lib/organization-api";
 import IntegrationsPanel from "./IntegrationsPanel";
+import OrganizationExplorer from "./OrganizationExplorer";
 import "./organization.css";
 
 const views: Record<DashboardView, { title: string; description: string }> = {
@@ -46,6 +47,7 @@ function RoleForm({ role, busy, save }: { role?: OrgRole; busy: boolean; save: (
     <Button type="submit" disabled={busy}>{role ? "Update role" : "Create role"}</Button></form>;
 }
 export default function OrganizationWorkspace() {
+  const [explore, setExplore] = useState(false);
   const [setup, setSetup] = useState<OrgSetup | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [view, setView] = useState<DashboardView>("EMPLOYEE");
@@ -89,6 +91,8 @@ export default function OrganizationWorkspace() {
         {data.projects && <DataTable title="Project portfolio" rows={data.projects} columns={[["name", "Project"], ["tasks", "Tasks"], ["completed", "Completed"], ["blocked", "Blocked"]]} />}
         <DataTable title={view === "EMPLOYEE" ? "Observations affecting my work" : "Risks requiring review"} rows={data.risks} columns={[["title", "Evidence task"], ["project_name", "Project"], ["rule", "Condition"], ["triage_status", "Review"]]} />
         <p>Open Work & insights to inspect task evidence, edit work, or triage observations.</p>
+        <Button variant="secondary" onClick={() => setExplore(value => !value)}>{explore ? "Close relationship explorer" : "Explore relationships and trends"}</Button>
+        {explore && <OrganizationExplorer />}
       </>}</>}
     {tab === "organization" && setup?.canManage && <>
       <Alert>Administrative access does not automatically grant business data access. Existing projects stay restricted until their owner changes the project audience in Work & insights.</Alert>

@@ -34,7 +34,7 @@ pnpm build
 mvn -f apps/api-java/pom.xml test
 ```
 
-Node tests cover the reference API and frontend transport. The October 24 work-intelligence pass verified 92 reference API tests, 12 frontend transport tests, 113 Java tests (including Testcontainers PostgreSQL), lint, type checking, builds, clean Flyway migrations, and live work/insight API and browser workflows. Live external integrations and provider-backed generation remain unverified. See the [engineering report](docs/WORK_INTELLIGENCE_REPORT.md) for scope, exact commands and remaining platform gaps.
+Node tests cover the reference API and frontend transport. The October 25 organization and work pass verified 121 Java tests (including Testcontainers PostgreSQL) and live role, planning, graph/metrics, and approval-gated action API workflows. Earlier checks covered 92 reference API tests, 12 frontend transport tests, lint, type checking, builds, and clean migrations. External provider authentication and writes remain unverified without configured accounts. See the [platform completion status](docs/PLATFORM_COMPLETION_STATUS.md) for current scope and remaining requirements.
 
 ## Documentation
 

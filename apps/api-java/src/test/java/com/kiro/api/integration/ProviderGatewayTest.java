@@ -6,6 +6,36 @@ import java.net.http.HttpRequest;
 import org.junit.jupiter.api.Test;
 
 class ProviderGatewayTest {
+ @Test void analyticsPreservesTypedMetricsAndFixedPaginationDates() {
+  var requests=new ArrayList<HttpRequest>();
+  var g=gateway("{\"rowCount\":2,\"rows\":[{\"dimensionValues\":[{\"value\":\"Launch\"}],\"metricValues\":[{\"value\":\"100\"},{\"value\":\"5\"},{\"value\":\"12.50\"}]}],\"metadata\":{\"currencyCode\":\"USD\"}}",requests);
+  var page=g.fetch("googleanalytics","12345","","token",null);
+  assertEquals(3,page.records().size());assertNotNull(page.nextCursor());
+  assertEquals("sessions",page.records().getFirst().metric().unit());
+  assertEquals("USD",page.records().getLast().metric().currency());
+  assertEquals(new java.math.BigDecimal("12.50"),page.records().getLast().metric().value());
+  assertEquals("analyticsdata.googleapis.com",requests.getFirst().uri().getHost());
+  var next=g.fetch("googleanalytics","12345","","token",page.nextCursor());
+  assertEquals(page.records().getFirst().metric().start(),next.records().getFirst().metric().start());assertNull(next.nextCursor());
+  assertTrue(gateway("{\"rowCount\":0}",new ArrayList<>()).fetch("googleanalytics","123","","token",null).records().isEmpty());
+ }
+ @Test void issueCreationSendsExactApprovedContentAndStableReconciliationMarker() throws Exception {
+  var requests=new ArrayList<HttpRequest>();
+  var g=new ProviderGateway(new ObjectMapper(),r->{requests.add(r);return new ProviderGateway.Reply(201,"{\"id\":123,\"number\":7}","60");});
+  assertEquals("https://github.com/a/b/issues/7",g.createGitHubIssue("a/b","test-token","Exact title","Exact body","action-1").get("url"));
+  var request=requests.getFirst();assertEquals("POST",request.method());assertEquals("https://api.github.com/repos/a/b/issues",request.uri().toString());
+  var bytes=new java.io.ByteArrayOutputStream();var done=new java.util.concurrent.CompletableFuture<Void>();
+  request.bodyPublisher().orElseThrow().subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+   public void onSubscribe(java.util.concurrent.Flow.Subscription s){s.request(Long.MAX_VALUE);}
+   public void onNext(java.nio.ByteBuffer b){byte[] part=new byte[b.remaining()];b.get(part);bytes.writeBytes(part);}
+   public void onError(Throwable t){done.completeExceptionally(t);}
+   public void onComplete(){done.complete(null);}
+  });
+  done.get(2,java.util.concurrent.TimeUnit.SECONDS);
+  var body=new ObjectMapper().readTree(bytes.toByteArray());
+  assertEquals("Exact title",body.path("title").asText());assertEquals("Exact body\n\n<!-- kiro-action:action-1 -->",body.path("body").asText());
+  assertThrows(ProviderGateway.ProviderFailure.class,()->g.createGitHubIssue("../private","token","Title","Body","a"));
+ }
  ProviderGateway gateway(String body,List<HttpRequest> requests) {return new ProviderGateway(new ObjectMapper(),r->{requests.add(r);return new ProviderGateway.Reply(200,body,"60");});}
  @Test void githubNormalizesIssueAndUsesReadOnlyOfficialEndpoint() {
   var requests=new ArrayList<HttpRequest>();var g=gateway("[{\"id\":1,\"title\":\"Issue\",\"state\":\"open\",\"html_url\":\"https://github.com/a/b/issues/1\"}]",requests);

@@ -19,7 +19,7 @@ public class IntegrationService {
   public IntegrationService(JdbcTemplate db,OrganizationService org,CredentialVault vault,ProviderGateway gateway,PlatformTransactionManager manager) {
     this.db=db;this.org=org;this.vault=vault;this.gateway=gateway;this.tx=new TransactionTemplate(manager);
   }
-  public record ConnectionInput(@NotBlank @Pattern(regexp="github|slack|linear|hubspot|xero|bamboohr") String provider,
+  public record ConnectionInput(@NotBlank @Pattern(regexp="github|slack|linear|hubspot|xero|bamboohr|googleanalytics") String provider,
       @NotBlank @Size(max=200) String name,@NotBlank @Size(max=200) String resource,@Size(max=100) String accountId,
       @Size(max=10000) String token) {}
   public record TokenInput(@NotBlank @Size(max=10000) String token) {}
@@ -27,6 +27,7 @@ public class IntegrationService {
   public Map<String,Object> catalog(AuthenticatedPrincipal u) {
     return Map.of("canManage",org.canManage(u,"INTEGRATION_MANAGE"),"credentialStorageReady",vault.available(),"providers",List.of(
       capability("github","GitHub","Repository owner/name","","Issues and pull requests","Fine-grained token: selected repository Issues read (and Pull requests read for private PRs)"),
+      capability("googleanalytics","Google Analytics 4","Numeric property ID","","30 reporting dates ending two UTC dates ago: sessions, key events and revenue by first-user campaign. Dates use the property timezone; attribution, delayed reporting and thresholding can affect results.","OAuth access token: analytics.readonly with property access; reconnect after expiry"),
       capability("slack","Slack","Approved public channel ID","Workspace subdomain","Messages in one joined public channel; no DMs, private channels or thread replies","Bot token: channels:read, channels:history; bot must join channel"),
       capability("linear","Linear","Team UUID","","Team issues","Personal API key restricted to the selected team; read access"),
       capability("hubspot","HubSpot","Portal ID","","Deals: name, stage, amount and currency","Private app token: crm.objects.deals.read"),
@@ -79,10 +80,11 @@ public class IntegrationService {
     owned(u,id);
     return db.queryForList("""
       SELECT r.id,r.external_id,r.kind,r.title,r.status,r.source_url,r.source_updated_at,r.observed_at,
-        f.amount,f.currency,h.department,h.supervisor_reference
+        f.amount,f.currency,h.department,h.supervisor_reference,m.metric,m.value AS metric_value,m.unit,m.period_start,m.period_end,m.campaign,m.currency AS metric_currency
       FROM provider_records r JOIN provider_connections c ON c.id=r.connection_id AND c.tenant_id=r.tenant_id
       LEFT JOIN provider_financial_facts f ON f.record_id=r.id AND f.tenant_id=r.tenant_id
       LEFT JOIN provider_people_facts h ON h.record_id=r.id AND h.tenant_id=r.tenant_id
+      LEFT JOIN provider_metric_observations m ON m.record_id=r.id AND m.tenant_id=r.tenant_id
       WHERE c.tenant_id=? AND c.owner_id=? AND c.id=? AND c.status='READY'
         AND c.last_success_at>now()-interval '24 hours' AND r.deleted_at IS NULL
       ORDER BY r.external_id LIMIT 100 OFFSET ?
@@ -167,6 +169,11 @@ public class IntegrationService {
         generation=EXCLUDED.generation,observed_at=now(),deleted_at=NULL RETURNING id
       """,String.class,UUID.randomUUID().toString(),c.get("tenant_id"),c.get("id"),r.externalId(),r.kind(),
       r.title().substring(0,Math.min(r.title().length(),4000)),r.status(),r.url(),r.updatedAt(),c.get("generation"));
+    if(r.metric()!=null) {
+      var m=r.metric();
+      db.update("INSERT INTO provider_metric_observations(tenant_id,record_id,metric,value,unit,period_start,period_end,campaign,currency) VALUES (?,?,?,?,?,?::date,?::date,?,?) ON CONFLICT(record_id) DO UPDATE SET value=EXCLUDED.value,currency=EXCLUDED.currency",
+          c.get("tenant_id"),id,m.metric(),m.value(),m.unit(),m.start(),m.end(),m.campaign(),m.currency());
+    }
     if(Set.of("DEAL","INVOICE").contains(r.kind())) db.update("""
       INSERT INTO provider_financial_facts(tenant_id,record_id,amount,currency) VALUES (?,?,?,?)
       ON CONFLICT(record_id) DO UPDATE SET amount=EXCLUDED.amount,currency=EXCLUDED.currency

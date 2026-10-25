@@ -42,6 +42,15 @@ class IntegrationPostgresTest {
   assertFalse(service.list(owner).toString().contains("secret-test-token"));
   assertFalse(org.auditHistory(owner).toString().contains("secret-test-token"));
  }
+ @Test void marketingMetricsPersistWithUnitsPeriodsAndPrivateOwnership() {
+  String id=(String)service.create(owner,new IntegrationService.ConnectionInput("googleanalytics","Synthetic campaign","123","","test-token")).get("id");
+  reply(200,"{\"rowCount\":1,\"rows\":[{\"dimensionValues\":[{\"value\":\"Launch\"}],\"metricValues\":[{\"value\":\"100\"},{\"value\":\"5\"},{\"value\":\"12.50\"}]}],\"metadata\":{\"currencyCode\":\"USD\"}}");
+  service.sync(owner,id);assertEquals("READY",status(id));
+  assertEquals(3,((List<?>)service.records(owner,id,0)).size());
+  assertEquals(3L,db.queryForObject("SELECT count(*) FROM provider_metric_observations",Long.class));
+  service.sync(owner,id);assertEquals(3L,db.queryForObject("SELECT count(*) FROM provider_metric_observations",Long.class));
+  assertThrows(ResponseStatusException.class,()->service.records(otherAdmin,id,0));
+ }
  @Test void fullReconciliationIsIdempotentAndExpiresMissingRecords() {
   String id=connection("secret-test-token");reply(200,"[{\"id\":1,\"title\":\"Task\",\"state\":\"open\"}]");service.sync(owner,id);
   assertEquals("READY",status(id));assertEquals(1,((List<?>)service.records(owner,id,0)).size());

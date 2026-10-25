@@ -21,6 +21,16 @@ public class WorkActionService {
  public record Decision(@NotNull @Min(1) Integer expectedVersion,boolean approve,@NotBlank @Size(max=1000) String reason) {}
  public record Execution(@NotNull @Min(1) Integer expectedVersion,@AssertTrue boolean confirmExecution) {}
  private ResponseStatusException conflict(String message) {return new ResponseStatusException(HttpStatus.CONFLICT,message);}
+ @org.springframework.scheduling.annotation.Scheduled(fixedDelay=60000)
+ public void recoverInterruptedExecutions() {
+  tx.executeWithoutResult(t->{
+   var interrupted=db.queryForList("SELECT id,tenant_id,project_id,requested_by FROM work_actions WHERE status='EXECUTING' AND started_at<now()-interval '2 minutes'");
+   for(var action:interrupted) {
+    int changed=db.update("UPDATE work_actions SET status='UNKNOWN',error_code='EXECUTION_INTERRUPTED_VERIFY_PROVIDER',finished_at=now(),version=version+1 WHERE id=? AND status='EXECUTING'",action.get("id"));
+    if(changed==1)db.update("INSERT INTO work_events(id,tenant_id,project_id,actor_id,kind,payload) VALUES (?,?,?,?,?,jsonb_build_object('actionId',?::text,'state','UNKNOWN'::text))",UUID.randomUUID().toString(),action.get("tenant_id"),action.get("project_id"),action.get("requested_by"),"PROVIDER_ACTION_RECOVERED",action.get("id"));
+   }
+  });
+ }
  private Map<String,Object> action(AuthenticatedPrincipal u,String p,String id) {
   work.project(u,p,false);
   var rows=db.queryForList("SELECT * FROM work_actions WHERE tenant_id=? AND project_id=? AND id=? FOR UPDATE",u.tenantId(),p,id);
@@ -75,7 +85,7 @@ public class WorkActionService {
    state=Set.of("PROVIDER_HTTP_400","PROVIDER_HTTP_401","PROVIDER_HTTP_403","PROVIDER_HTTP_404","PROVIDER_HTTP_422","PROVIDER_HTTP_429").contains(error)?"FAILED":"UNKNOWN";
   } finally {claimed.remove("token");}
   String finalState=state,finalError=error;var finalResult=result;
-  tx.executeWithoutResult(t->{db.update("UPDATE work_actions SET status=?,finished_at=now(),external_id=?,external_url=?,error_code=?,version=version+1 WHERE id=? AND status='EXECUTING'",finalState,finalResult.get("externalId"),finalResult.get("url"),finalError,id);audit(u,p,id,finalState);});
+  tx.executeWithoutResult(t->{db.update("UPDATE work_actions SET status=?,finished_at=now(),external_id=?,external_url=?,error_code=?,version=version+1 WHERE id=? AND status IN ('EXECUTING','UNKNOWN')",finalState,finalResult.get("externalId"),finalResult.get("url"),finalError,id);audit(u,p,id,finalState);});
   return Map.of("status",state,"result",result,"error",error==null?"":error);
  }
 }

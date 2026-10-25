@@ -43,7 +43,8 @@ public class WorkService {
 
   Map<String,Object> project(AuthenticatedPrincipal u, String id, boolean write) {
     // Locking serializes grants/revocation and writes on a project.
-    var rows=db.queryForList("SELECT p.* FROM work_projects p WHERE "+VISIBLE+" AND p.id=? FOR UPDATE",
+    String lock=org.springframework.transaction.support.TransactionSynchronizationManager.isCurrentTransactionReadOnly()?"":" FOR UPDATE";
+    var rows=db.queryForList("SELECT p.* FROM work_projects p WHERE "+VISIBLE+" AND p.id=?"+lock,
         u.tenantId(),u.id(),u.id(),id);
     if(rows.isEmpty()) throw missing();
     var p=rows.getFirst();
