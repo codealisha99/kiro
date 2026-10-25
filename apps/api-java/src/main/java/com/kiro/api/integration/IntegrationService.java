@@ -59,7 +59,8 @@ public class IntegrationService {
     });return owned(u,id);
   }
   public Map<String,Object> credential(AuthenticatedPrincipal u,String id,String token) {
-    owned(u,id);String encrypted=vault.encrypt(token,u.tenantId()+":"+id);
+    if("DELETED".equals(owned(u,id).get("status")))throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted; create a new connection to reconnect");
+    String encrypted=vault.encrypt(token,u.tenantId()+":"+id);
     tx.executeWithoutResult(t->{
       db.update("UPDATE provider_sync_runs SET status='CANCELLED',finished_at=now() WHERE tenant_id=? AND connection_id=? AND finished_at IS NULL",u.tenantId(),id);
       db.update("""
@@ -75,6 +76,20 @@ public class IntegrationService {
       db.update("UPDATE provider_connections SET encrypted_token=NULL,status='DISCONNECTED',lease_id=NULL,lease_until=NULL,cursor=NULL,generation=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
       org.audit(u,"CONNECTION_DISCONNECTED",Map.of("id",id));
     });return owned(u,id);
+  }
+  /** Permanently removes imported provider data while retaining a minimal audit tombstone. */
+  public void deleteData(AuthenticatedPrincipal u,String id) {
+    if("DELETED".equals(owned(u,id).get("status")))return;
+    tx.executeWithoutResult(t->{
+      db.update("UPDATE provider_sync_runs SET status='CANCELLED',finished_at=now(),error_code='CONNECTION_DATA_DELETED' WHERE tenant_id=? AND connection_id=? AND finished_at IS NULL",u.tenantId(),id);
+      db.update("DELETE FROM work_source_mappings WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
+      db.update("DELETE FROM provider_metric_observations WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
+      db.update("DELETE FROM provider_financial_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
+      db.update("DELETE FROM provider_people_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
+      db.update("DELETE FROM provider_records WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
+      db.update("UPDATE provider_connections SET encrypted_token=NULL,status='DELETED',name='Deleted connection',resource='',account_id='',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,last_error=NULL,next_sync_at=now()+interval '100 years',updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
+      org.audit(u,"CONNECTION_DATA_DELETED",Map.of("id",id));
+    });
   }
   public Object records(AuthenticatedPrincipal u,String id,int offset) {
     owned(u,id);
@@ -94,7 +109,7 @@ public class IntegrationService {
     owned(u,id);return db.queryForList("SELECT id,status,started_at,finished_at,records_seen,error_code FROM provider_sync_runs WHERE tenant_id=? AND connection_id=? ORDER BY started_at DESC LIMIT 30",u.tenantId(),id);
   }
   public Object sync(AuthenticatedPrincipal u,String id) {
-    owned(u,id);
+    if("DELETED".equals(owned(u,id).get("status")))throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted; create a new connection to reconnect");
     // A user can refresh READY data early, but cannot bypass a provider retry deadline.
     db.update("UPDATE provider_connections SET next_sync_at=now() WHERE tenant_id=? AND id=? AND owner_id=? AND status='READY'",u.tenantId(),id,u.id());
     syncPage(id);return owned(u,id);

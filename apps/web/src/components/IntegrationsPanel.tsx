@@ -11,6 +11,7 @@ export default function IntegrationsPanel() {
   const [loading, setLoading] = useState(true); const [selected, setSelected] = useState<DataRow | null>(null);
   const [records, setRecords] = useState<DataRow[]>([]); const [runs, setRuns] = useState<DataRow[]>([]); const [offset, setOffset] = useState(0);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [mapping, setMapping] = useState<DataRow | null>(null);
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -56,22 +57,26 @@ export default function IntegrationsPanel() {
       </form></Card>
       <div className="org-heading"><h2>Your connections</h2><Button variant="secondary" disabled={busy} onClick={() => void action(async () => {})}>Refresh connections</Button></div>
       {!connections.length && <p>No connections configured. No external synchronization has occurred.</p>}
-      {connections.map(c => <Card key={String(c.id)}><h3>{String(c.name)}</h3><Badge tone={c.status === "READY" ? "success" : "warning"}>{String(c.status)}</Badge>
+      {connections.map(c => <Card key={String(c.id)}><h3>{String(c.name)}</h3><Badge tone={c.status === "READY" ? "success" : c.status === "DELETED" ? "neutral" : "warning"}>{String(c.status)}</Badge>
         <p>{String(c.provider)} · {String(c.resource)}</p><p>Last complete sync: {c.last_success_at ? new Date(String(c.last_success_at)).toLocaleString() : "Never"}.</p>
         {c.last_error && <Alert tone="warning">{String(c.last_error)}. Correct permissions or replace the credential to restart.</Alert>}
         <p>Records appear only after a complete successful scan and are withheld after errors, disconnects, or 24 hours without success. Multi-page scans continue automatically; Refresh connections checks progress.</p>
-        <div className="org-tabs"><Button disabled={busy || ["UNCONFIGURED", "DISCONNECTED", "FAILED", "REAUTH"].includes(String(c.status))}
+        <div className="org-tabs"><Button disabled={busy || ["UNCONFIGURED", "DISCONNECTED", "FAILED", "REAUTH", "DELETED"].includes(String(c.status))}
           onClick={() => void action(async () => { await orgApi.sync(String(c.id)); })}>Synchronize next page</Button>
           <Button variant="secondary" disabled={busy} onClick={() => void action(() => inspect(c))}>Inspect records & runs</Button>
-          <Button variant="secondary" disabled={busy || c.status === "DISCONNECTED"} onClick={() => setDisconnecting(String(c.id))}>Disconnect</Button></div>
+          <Button variant="secondary" disabled={busy || ["DISCONNECTED", "DELETED"].includes(String(c.status))} onClick={() => setDisconnecting(String(c.id))}>Disconnect</Button>
+          <Button variant="danger" disabled={busy || c.status === "DELETED"} onClick={() => setDeleting(String(c.id))}>Delete connection data</Button></div>
         {disconnecting === c.id && <Alert tone="warning">Disconnect removes the stored credential and hides imported records. Historical rows remain in storage.
           <div className="org-tabs"><Button variant="danger" disabled={busy} onClick={() => void action(async () => { await orgApi.disconnect(String(c.id)); setDisconnecting(null); })}>Confirm disconnect</Button>
           <Button variant="secondary" disabled={busy} onClick={() => setDisconnecting(null)}>Cancel</Button></div></Alert>}
-        <details><summary>Add or replace credential</summary><form className="org-form" onSubmit={e => {
+        {deleting === c.id && <Alert tone="danger">Permanently delete this connection and its imported records, facts, and source links? A minimal audit tombstone will remain; this cannot be undone.
+          <div className="org-tabs"><Button variant="danger" disabled={busy} onClick={() => void action(async () => { await orgApi.deleteConnectionData(String(c.id)); setDeleting(null); })}>Permanently delete data</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>Cancel</Button></div></Alert>}
+        {c.status !== "DELETED" && <details><summary>Add or replace credential</summary><form className="org-form" onSubmit={e => {
           e.preventDefault(); const form = e.currentTarget; const token = String(new FormData(form).get("token"));
           void action(async () => { await orgApi.credential(String(c.id), token); form.reset(); });
         }}><Field label={`New credential for ${String(c.name)}`}>{f => <Input {...f} name="token" type="password" autoComplete="new-password" required disabled={busy || !catalog.credentialStorageReady} />}</Field>
-          <Button type="submit" disabled={busy || !catalog.credentialStorageReady}>Save credential & restart sync</Button></form></details>
+          <Button type="submit" disabled={busy || !catalog.credentialStorageReady}>Save credential & restart sync</Button></form></details>}
       </Card>)}
       {selected && <Card><h2>{String(selected.name)} — imported records</h2>
         {!records.length && <p>No current records on this page. The connection may be unconfigured, synchronizing, stale, or empty.</p>}
