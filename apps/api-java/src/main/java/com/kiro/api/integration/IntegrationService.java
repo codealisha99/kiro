@@ -4,6 +4,12 @@ import com.kiro.api.organization.OrganizationService;
 import com.kiro.api.security.AuthenticatedPrincipal;
 import jakarta.validation.constraints.*;
 import java.util.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.sql.Timestamp;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,18 +26,18 @@ public class IntegrationService {
     this.db=db;this.org=org;this.vault=vault;this.gateway=gateway;this.tx=new TransactionTemplate(manager);
   }
   public record ConnectionInput(@NotBlank @Pattern(regexp="github|slack|linear|hubspot|xero|bamboohr|googleanalytics") String provider,
-      @NotBlank @Size(max=200) String name,@NotBlank @Size(max=200) String resource,@Size(max=100) String accountId,
+      @NotBlank @Size(max=200) String name,@Size(max=200) String resource,@Size(max=100) String accountId,
       @Size(max=10000) String token) {}
   public record TokenInput(@NotBlank @Size(max=10000) String token) {}
   private static final String PUBLIC="id,provider,name,resource,account_id,status,cursor,last_success_at,next_sync_at,last_error,created_at";
   public Map<String,Object> catalog(AuthenticatedPrincipal u) {
-    return Map.of("canManage",org.canManage(u,"INTEGRATION_MANAGE"),"credentialStorageReady",vault.available(),"providers",List.of(
+    return Map.of("canManage",org.canManage(u,"INTEGRATION_MANAGE"),"credentialStorageReady",vault.available(),"xeroOAuthConfigured",gateway.xeroOAuthConfigured(),"providers",List.of(
       capability("github","GitHub","Repository owner/name","","Issues and pull requests","Fine-grained token: selected repository Issues read (and Pull requests read for private PRs)"),
       capability("googleanalytics","Google Analytics 4","Numeric property ID","","30 reporting dates ending two UTC dates ago: sessions, key events and revenue by first-user campaign. Dates use the property timezone; attribution, delayed reporting and thresholding can affect results.","OAuth access token: analytics.readonly with property access; reconnect after expiry"),
       capability("slack","Slack","Approved public channel ID","Workspace subdomain","Messages in one joined public channel; no DMs, private channels or thread replies","Bot token: channels:read, channels:history; bot must join channel"),
       capability("linear","Linear","Team UUID","","Team issues","Personal API key restricted to the selected team; read access"),
       capability("hubspot","HubSpot","Portal ID","","Deals: name, stage, amount and currency","Private app token: crm.objects.deals.read"),
-      capability("xero","Xero","Xero tenant UUID","","Invoices: number, status, total and currency","OAuth access token: accounting.transactions.read; reconnect after expiry"),
+      capability("xero","Xero","Xero organization (selected after authorization)","","Invoices: number, status, total and currency","OAuth: accounting.transactions.read and offline_access; tokens refresh automatically"),
       capability("bamboohr","BambooHR","Company subdomain","","Shared employee directory; no compensation, medical or payroll data","API key for a user authorized for the directory")
     ));
   }
@@ -48,23 +54,94 @@ public class IntegrationService {
     if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Connection not found");return rows.getFirst();
   }
   public Map<String,Object> create(AuthenticatedPrincipal u,ConnectionInput input) {
-    org.requireManage(u,"INTEGRATION_MANAGE");String account=Objects.requireNonNullElse(input.accountId(),"");
-    try {gateway.validate(input.provider(),input.resource(),account);}catch(ProviderGateway.ProviderFailure e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,e.code);}
+    org.requireManage(u,"INTEGRATION_MANAGE");String account=Objects.requireNonNullElse(input.accountId(),"");String resource=Objects.requireNonNullElse(input.resource(),"");
+    boolean oauthSetup=input.provider().equals("xero")&&resource.isBlank()&&(input.token()==null||input.token().isBlank());
+    if(!oauthSetup)try {gateway.validate(input.provider(),resource,account);}catch(ProviderGateway.ProviderFailure e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,e.code);}
     String id=UUID.randomUUID().toString();boolean configured=input.token()!=null&&!input.token().isBlank();
     String encrypted=configured?vault.encrypt(input.token(),u.tenantId()+":"+id):null;
     tx.executeWithoutResult(t->{
       db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,account_id,encrypted_token,status) VALUES (?,?,?,?,?,?,?,?,?)",
-        id,u.tenantId(),u.id(),input.provider(),input.name().trim(),input.resource(),account,encrypted,configured?"PENDING":"UNCONFIGURED");
+        id,u.tenantId(),u.id(),input.provider(),input.name().trim(),resource,account,encrypted,configured?"PENDING":"UNCONFIGURED");
       org.audit(u,"CONNECTION_CREATED",Map.of("id",id,"provider",input.provider()));
     });return owned(u,id);
   }
+  public record OAuthStart(String authorizationUrl) {}
+  public OAuthStart startXeroOAuth(AuthenticatedPrincipal u,String id) {
+    var c=owned(u,id);
+    if(!"xero".equals(c.get("provider")))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"This connection is not Xero");
+    if("DELETED".equals(c.get("status")))throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted");
+    if(!vault.available())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Configure INTEGRATION_ENCRYPTION_KEY before authorizing Xero");
+    String state=randomUrlToken(32),verifier=randomUrlToken(48);
+    final String authorizationUrl;try{authorizationUrl=gateway.xeroAuthorizationUrl(state,verifier);}catch(ProviderGateway.ProviderFailure e){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Configure Xero OAuth client settings before authorizing");}
+    String stateHash=sha256(state),encryptedVerifier=vault.encrypt(verifier,u.tenantId()+":"+id+":xero-pkce");
+    int changed=tx.execute(t->{
+      db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
+      return db.update("""
+      UPDATE provider_connections SET status='OAUTH_AUTHORIZING',oauth_state_hash=?,oauth_state_expires_at=now()+interval '10 minutes',
+        encrypted_pkce_verifier=?,encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,
+        cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,last_error=NULL,updated_at=now()
+      WHERE tenant_id=? AND owner_id=? AND id=? AND status<>'DELETED'
+      """,stateHash,encryptedVerifier,u.tenantId(),u.id(),id);
+    });
+    if(changed!=1)throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted");
+    org.audit(u,"XERO_AUTHORIZATION_STARTED",Map.of("id",id));
+    return new OAuthStart(authorizationUrl);
+  }
+  public String completeXeroOAuth(String state,String code) {
+    if(state==null||state.length()>256)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Xero authorization state is invalid or expired");
+    String hash=sha256(state);
+    Map<String,Object> pending=tx.execute(t->{
+      var rows=db.queryForList("SELECT id,tenant_id,owner_id,encrypted_pkce_verifier FROM provider_connections WHERE provider='xero' AND status='OAUTH_AUTHORIZING' AND oauth_state_hash=? AND oauth_state_expires_at>now() FOR UPDATE",hash);
+      if(rows.isEmpty())return null;
+      var row=rows.getFirst();db.update("UPDATE provider_connections SET oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,updated_at=now() WHERE id=?",row.get("id"));return row;
+    });
+    if(pending==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Xero authorization state is invalid, expired, or already used");
+    String id=(String)pending.get("id"),tenant=(String)pending.get("tenant_id");
+    try {
+      String verifier=vault.decrypt((String)pending.get("encrypted_pkce_verifier"),tenant+":"+id+":xero-pkce");
+      var identity=db.queryForMap("SELECT email,role FROM users WHERE id=? AND \"tenantId\"=?",pending.get("owner_id"),tenant);
+      var owner=new AuthenticatedPrincipal((String)pending.get("owner_id"),(String)identity.get("email"),tenant,((String)identity.get("role")).toLowerCase());
+      if(!org.canManage(owner,"INTEGRATION_MANAGE"))throw new ProviderGateway.ProviderFailure("OWNER_PERMISSION_REVOKED",false,0);
+      if(code==null||code.isBlank()||code.length()>4096)throw new ProviderGateway.ProviderFailure("XERO_AUTHORIZATION_DENIED",false,0);
+      var tokens=gateway.exchangeXeroCode(code,verifier);if(tokens.expiresIn()<1)throw new ProviderGateway.ProviderFailure("XERO_OAUTH_INVALID_EXPIRY",false,0);
+      var tenants=gateway.xeroTenants(tokens.accessToken());
+      String access=vault.encrypt(tokens.accessToken(),tenant+":"+id),refresh=vault.encrypt(tokens.refreshToken(),tenant+":"+id+":xero-refresh");
+      tx.executeWithoutResult(t->{
+        if(db.queryForList("SELECT id FROM provider_connections WHERE tenant_id=? AND id=? AND owner_id=? AND status='OAUTH_AUTHORIZING' FOR UPDATE",tenant,id,pending.get("owner_id")).isEmpty())throw new ResponseStatusException(HttpStatus.GONE,"Xero authorization was cancelled");
+        db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",tenant,id);
+        tenants.forEach(x->db.update("INSERT INTO provider_oauth_tenants(tenant_id,connection_id,xero_tenant_id,tenant_name) VALUES (?,?,?,?)",tenant,id,x.tenantId(),x.tenantName()));
+        db.update("UPDATE provider_connections SET encrypted_token=?,encrypted_refresh_token=?,access_token_expires_at=now()+(? * interval '1 second'),status='OAUTH_TENANT',oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=? AND status='OAUTH_AUTHORIZING'",access,refresh,tokens.expiresIn(),tenant,id,pending.get("owner_id"));
+      });
+      return id;
+    } catch(Exception e) {
+      String reason=e instanceof ProviderGateway.ProviderFailure f?f.code:"XERO_OAUTH_FAILED";
+      db.update("UPDATE provider_connections SET status='REAUTH',encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,last_error=?,oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND status='OAUTH_AUTHORIZING'",reason,tenant,id);
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Xero authorization failed. Start a new authorization from Connected applications.");
+    }
+  }
+  public List<Map<String,Object>> xeroTenants(AuthenticatedPrincipal u,String id) {
+    if(!"xero".equals(owned(u,id).get("provider")))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"This connection is not Xero");
+    return db.queryForList("SELECT xero_tenant_id,tenant_name FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=? ORDER BY tenant_name",u.tenantId(),id);
+  }
+  public Map<String,Object> selectXeroTenant(AuthenticatedPrincipal u,String id,String xeroTenantId) {
+    var c=owned(u,id);if(!"xero".equals(c.get("provider")))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"This connection is not Xero");
+    if("DELETED".equals(c.get("status")))throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted");
+    try{gateway.validate("xero",xeroTenantId,"");}catch(ProviderGateway.ProviderFailure e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid Xero organization");}
+    int selected=db.update("UPDATE provider_connections c SET resource=?,status='PENDING',next_sync_at=now(),cursor=NULL,generation=NULL,last_error=NULL,updated_at=now() WHERE c.tenant_id=? AND c.id=? AND c.owner_id=? AND c.status='OAUTH_TENANT' AND EXISTS(SELECT 1 FROM provider_oauth_tenants t WHERE t.tenant_id=c.tenant_id AND t.connection_id=c.id AND t.xero_tenant_id=?)",xeroTenantId,u.tenantId(),id,u.id(),xeroTenantId);
+    if(selected!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"Choose an organization returned by this Xero authorization");
+    org.audit(u,"XERO_ORGANIZATION_SELECTED",Map.of("id",id,"tenantId",xeroTenantId));return owned(u,id);
+  }
+  private static String randomUrlToken(int bytes) {byte[] value=new byte[bytes];new SecureRandom().nextBytes(value);return Base64.getUrlEncoder().withoutPadding().encodeToString(value);}
+  private static String sha256(String value) {try{return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException("Secure hash unavailable");}}
   public Map<String,Object> credential(AuthenticatedPrincipal u,String id,String token) {
     if("DELETED".equals(owned(u,id).get("status")))throw new ResponseStatusException(HttpStatus.GONE,"Connection data was permanently deleted; create a new connection to reconnect");
     String encrypted=vault.encrypt(token,u.tenantId()+":"+id);
     tx.executeWithoutResult(t->{
+      db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
       db.update("UPDATE provider_sync_runs SET status='CANCELLED',finished_at=now() WHERE tenant_id=? AND connection_id=? AND finished_at IS NULL",u.tenantId(),id);
       db.update("""
         UPDATE provider_connections SET encrypted_token=?,status='PENDING',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,
+        encrypted_refresh_token=NULL,access_token_expires_at=NULL,oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,
         next_sync_at=now(),failure_count=0,last_error=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?
         """,encrypted,u.tenantId(),id,u.id());
       org.audit(u,"CONNECTION_CREDENTIAL_REPLACED",Map.of("id",id));
@@ -72,8 +149,9 @@ public class IntegrationService {
   }
   public Map<String,Object> disconnect(AuthenticatedPrincipal u,String id) {
     owned(u,id);tx.executeWithoutResult(t->{
+      db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
       db.update("UPDATE provider_sync_runs SET status='CANCELLED',finished_at=now() WHERE tenant_id=? AND connection_id=? AND finished_at IS NULL",u.tenantId(),id);
-      db.update("UPDATE provider_connections SET encrypted_token=NULL,status='DISCONNECTED',lease_id=NULL,lease_until=NULL,cursor=NULL,generation=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
+      db.update("UPDATE provider_connections SET encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,status='DISCONNECTED',oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,lease_id=NULL,lease_until=NULL,cursor=NULL,generation=NULL,updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
       org.audit(u,"CONNECTION_DISCONNECTED",Map.of("id",id));
     });return owned(u,id);
   }
@@ -87,7 +165,8 @@ public class IntegrationService {
       db.update("DELETE FROM provider_financial_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
       db.update("DELETE FROM provider_people_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
       db.update("DELETE FROM provider_records WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
-      db.update("UPDATE provider_connections SET encrypted_token=NULL,status='DELETED',name='Deleted connection',resource='',account_id='',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,last_error=NULL,next_sync_at=now()+interval '100 years',updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
+      db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
+      db.update("UPDATE provider_connections SET encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,status='DELETED',name='Deleted connection',resource='',account_id='',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,last_error=NULL,next_sync_at=now()+interval '100 years',updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
       org.audit(u,"CONNECTION_DATA_DELETED",Map.of("id",id));
     });
   }
@@ -150,6 +229,20 @@ public class IntegrationService {
     if(c==null)return;
     try {
       String token=vault.decrypt((String)c.get("encrypted_token"),c.get("tenant_id")+":"+id);
+      if("xero".equals(c.get("provider"))&&tokenExpiresSoon(c.get("access_token_expires_at"))) {
+        String storedRefresh=(String)c.get("encrypted_refresh_token");
+        if(storedRefresh==null)throw new ProviderGateway.ProviderFailure("XERO_REFRESH_REAUTH",false,0);
+        String refresh=vault.decrypt(storedRefresh,c.get("tenant_id")+":"+id+":xero-refresh");
+        var rotated=gateway.refreshXeroToken(refresh);
+        if(rotated.expiresIn()<1)throw new ProviderGateway.ProviderFailure("XERO_REFRESH_OUTCOME_UNKNOWN",false,0);
+        String accessCipher=vault.encrypt(rotated.accessToken(),c.get("tenant_id")+":"+id);
+        String refreshCipher=vault.encrypt(rotated.refreshToken(),c.get("tenant_id")+":"+id+":xero-refresh");
+        Integer persisted;
+        try { persisted=tx.execute(t->db.update("UPDATE provider_connections SET encrypted_token=?,encrypted_refresh_token=?,access_token_expires_at=now()+(? * interval '1 second'),updated_at=now() WHERE id=? AND tenant_id=? AND lease_id=? AND status='SYNCING'",accessCipher,refreshCipher,rotated.expiresIn(),id,c.get("tenant_id"),lease)); }
+        catch(Exception e) { throw new ProviderGateway.ProviderFailure("XERO_REFRESH_OUTCOME_UNKNOWN",false,0); }
+        if(persisted==null||persisted!=1)return;
+        token=rotated.accessToken();
+      }
       var page=gateway.fetch((String)c.get("provider"),(String)c.get("resource"),(String)c.get("account_id"),token,(String)c.get("cursor"));
       tx.executeWithoutResult(t->{
         if(db.queryForList("SELECT id FROM provider_connections WHERE id=? AND lease_id=? FOR UPDATE",id,lease).isEmpty())return;
@@ -168,13 +261,19 @@ public class IntegrationService {
         if(rows.isEmpty())return;
         int attempts=((Number)rows.getFirst().get("failure_count")).intValue()+1;
         boolean retry=failure.retryable && attempts<5;
-        boolean auth=Set.of("PROVIDER_HTTP_401","PROVIDER_HTTP_403","PROVIDER_HTTP_404","SLACK_AUTH_OR_SCOPE_ERROR","PUBLIC_JOINED_CHANNEL_REQUIRED").contains(failure.code);
+        boolean auth=Set.of("PROVIDER_HTTP_401","PROVIDER_HTTP_403","PROVIDER_HTTP_404","SLACK_AUTH_OR_SCOPE_ERROR","PUBLIC_JOINED_CHANNEL_REQUIRED").contains(failure.code)||failure.code.startsWith("XERO_REFRESH_");
+        boolean spentRefresh=failure.code.startsWith("XERO_REFRESH_");
         String status=retry?"RETRY":auth?"REAUTH":"FAILED";
         int delay=Math.max(failure.delaySeconds,Math.min(3600,60*(1<<Math.min(attempts,5))));
-        db.update("UPDATE provider_connections SET status=?,last_error=?,failure_count=?,next_sync_at=now()+(? * interval '1 second'),lease_id=NULL,lease_until=NULL WHERE id=?",status,failure.code,attempts,delay,id);
+        db.update("UPDATE provider_connections SET status=?,last_error=?,failure_count=?,next_sync_at=now()+(? * interval '1 second'),encrypted_token=CASE WHEN ? THEN NULL ELSE encrypted_token END,encrypted_refresh_token=CASE WHEN ? THEN NULL ELSE encrypted_refresh_token END,access_token_expires_at=CASE WHEN ? THEN NULL ELSE access_token_expires_at END,lease_id=NULL,lease_until=NULL WHERE id=?",status,failure.code,attempts,delay,spentRefresh,spentRefresh,spentRefresh,id);
         db.update("UPDATE provider_sync_runs SET error_code=?,status=?,finished_at=CASE WHEN ? THEN NULL ELSE now() END WHERE id=?",failure.code,retry?"RETRY":status,retry,c.get("generation"));
       });
     }
+  }
+  private static boolean tokenExpiresSoon(Object value) {
+    if(value==null)return false;
+    Instant expires=value instanceof OffsetDateTime d?d.toInstant():value instanceof Timestamp t?t.toInstant():value instanceof Instant i?i:null;
+    return expires!=null&&!expires.isAfter(Instant.now().plusSeconds(60));
   }
   private void saveRecord(Map<String,Object> c,ProviderGateway.SourceRecord r) {
     String id=db.queryForObject("""

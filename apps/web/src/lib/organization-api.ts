@@ -13,7 +13,7 @@ export interface DashboardData {
   teams?: DataRow[]; departments?: DataRow[]; reports?: DataRow[]; dependencies?: DataRow[]; resourceGaps?: DataRow[];
 }
 export interface Provider { id: string; name: string; resourceLabel: string; accountLabel: string; entities: string; permissions: string; sync: string; visibility: string }
-export interface Catalog { canManage: boolean; credentialStorageReady: boolean; providers: Provider[] }
+export interface Catalog { canManage: boolean; credentialStorageReady: boolean; xeroOAuthConfigured: boolean; providers: Provider[] }
 export const orgApi = {
   setup: () => request<OrgSetup>("/organization"),
   dashboard: (view: DashboardView) => request<DashboardData>(`/organization/dashboard?view=${view}`),
@@ -23,7 +23,10 @@ export const orgApi = {
   audience: (id: string, teamId: string | null, restricted: boolean) => request(`/work/projects/${encodeURIComponent(id)}/audience`, { method: "PUT", body: { teamId, restricted } }),
   catalog: () => request<Catalog>("/integrations/catalog"),
   connections: () => request<DataRow[]>("/integrations"),
-  createConnection: (body: unknown) => request("/integrations", { method: "POST", body }),
+  createConnection: (body: unknown) => request<{ id: string }>("/integrations", { method: "POST", body }),
+  startXeroOAuth: (id: string) => request<{ authorizationUrl: string }>(`/integrations/${encodeURIComponent(id)}/xero/authorize`, { method: "POST" }),
+  xeroTenants: (id: string) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/xero/tenants`),
+  selectXeroTenant: (id: string, tenantId: string) => request(`/integrations/${encodeURIComponent(id)}/xero/tenant`, { method: "POST", body: { tenantId } }),
   credential: (id: string, token: string) => request(`/integrations/${encodeURIComponent(id)}/credential`, { method: "PUT", body: { token } }),
   sync: (id: string) => request(`/integrations/${encodeURIComponent(id)}/sync`, { method: "POST" }),
   disconnect: (id: string) => request(`/integrations/${encodeURIComponent(id)}`, { method: "DELETE" }),

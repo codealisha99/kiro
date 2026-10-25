@@ -7,11 +7,13 @@ import { workApi, type WorkProject, type WorkTask } from "@/lib/work-api";
 
 export default function IntegrationsPanel() {
   const [catalog, setCatalog] = useState<Catalog | null>(null); const [connections, setConnections] = useState<DataRow[]>([]);
-  const [provider, setProvider] = useState("github"); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState("github"); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [oauthMessage, setOauthMessage] = useState("");
   const [loading, setLoading] = useState(true); const [selected, setSelected] = useState<DataRow | null>(null);
   const [records, setRecords] = useState<DataRow[]>([]); const [runs, setRuns] = useState<DataRow[]>([]); const [offset, setOffset] = useState(0);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [xeroTenants, setXeroTenants] = useState<Record<string, DataRow[]>>({});
+  const [tenantChoice, setTenantChoice] = useState<Record<string, string>>({});
   const [mapping, setMapping] = useState<DataRow | null>(null);
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -29,6 +31,11 @@ export default function IntegrationsPanel() {
       .catch(e => { if (active) setError((e as Error).message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("integration") === "xero" && params.get("oauth") === "success") setOauthMessage("Xero authorization succeeded. Choose the organization to sync.");
+    if (params.get("integration") === "xero" && params.get("oauth") === "error") setOauthMessage("Xero authorization did not complete. Review the connection and try again.");
+  }, []);
   async function action(fn: () => Promise<void>) { setBusy(true); setError(""); setSelected(null); setRecords([]); setRuns([]);
     try { await fn(); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
   async function inspect(c: DataRow, page = 0) {
@@ -37,33 +44,42 @@ export default function IntegrationsPanel() {
   }
   const capability = catalog?.providers.find(p => p.id === provider);
   return <div className="org-stack" aria-busy={busy || loading}>
-    {error && <Alert tone="danger">{error}</Alert>}{loading && <p role="status">Loading connections…</p>}
+    {error && <Alert tone="danger">{error}</Alert>}{oauthMessage && <Alert tone={oauthMessage.includes("succeeded") ? "success" : "warning"}>{oauthMessage}</Alert>}{loading && <p role="status">Loading connections…</p>}
     {catalog && !catalog.canManage && <Alert>Integration management permission is required.</Alert>}
     {catalog?.canManage && <>
       <Alert>Connections are private to their creator. Work records become visible to a project only when you explicitly link or import them. Connect only accounts and resources you are authorized to import and share.</Alert>
       {!catalog.credentialStorageReady && <Alert tone="warning">You can save connection settings now. Before adding credentials, configure the server’s INTEGRATION_ENCRYPTION_KEY. See the integration setup guide.</Alert>}
       <Card><h2>Add a connection</h2><form className="org-form" onSubmit={e => {
         e.preventDefault(); const form = e.currentTarget; const b = Object.fromEntries(new FormData(form).entries());
-        void action(async () => { await orgApi.createConnection({ ...b, provider }); form.reset(); });
+        void action(async () => {
+          if (provider === "xero") {
+            const connection = await orgApi.createConnection({ ...b, provider, resource: "", accountId: "", token: null });
+            const result = await orgApi.startXeroOAuth(connection.id); window.location.assign(result.authorizationUrl); return;
+          }
+          await orgApi.createConnection({ ...b, provider }); form.reset();
+        });
       }}>
         <Field label="Provider">{f => <Select {...f} disabled={busy} value={provider} onChange={e => setProvider(e.target.value)}>
           {catalog.providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>}</Field>
         <Field label="Connection name">{f => <Input {...f} name="name" required maxLength={200} disabled={busy} />}</Field>
-        <Field label={capability?.resourceLabel ?? "Resource"}>{f => <Input {...f} key={provider} name="resource" required maxLength={200} disabled={busy} />}</Field>
-        {capability?.accountLabel && <Field label={capability.accountLabel}>{f => <Input {...f} name="accountId" required maxLength={100} disabled={busy} />}</Field>}
-        <Field label="Credential (optional for now)" hint="Stored encrypted on the server. Never displayed again.">{f => <Input {...f} name="token" type="password" autoComplete="new-password" disabled={busy || !catalog.credentialStorageReady} />}</Field>
+        {provider !== "xero" && <Field label={capability?.resourceLabel ?? "Resource"}>{f => <Input {...f} key={provider} name="resource" required maxLength={200} disabled={busy} />}</Field>}
+        {provider !== "xero" && capability?.accountLabel && <Field label={capability.accountLabel}>{f => <Input {...f} name="accountId" required maxLength={100} disabled={busy} />}</Field>}
+        {provider !== "xero" && <Field label="Credential (optional for now)" hint="Stored encrypted on the server. Never displayed again.">{f => <Input {...f} name="token" type="password" autoComplete="new-password" disabled={busy || !catalog.credentialStorageReady} />}</Field>}
+        {provider === "xero" && <p>Xero opens its authorization page. You will choose which authorized organization to sync after returning to Kiro. Tokens stay encrypted on the server.</p>}
         <p>{capability?.entities}</p><p>Required access: {capability?.permissions}</p><p>{capability?.sync}</p>
-        <Button type="submit" disabled={busy}>Save connection</Button>
+        <Button type="submit" disabled={busy || (provider === "xero" && (!catalog.credentialStorageReady || !catalog.xeroOAuthConfigured))}>{provider === "xero" ? catalog.xeroOAuthConfigured ? "Authorize Xero" : "Xero authorization not configured" : "Save connection"}</Button>
       </form></Card>
       <div className="org-heading"><h2>Your connections</h2><Button variant="secondary" disabled={busy} onClick={() => void action(async () => {})}>Refresh connections</Button></div>
       {!connections.length && <p>No connections configured. No external synchronization has occurred.</p>}
       {connections.map(c => <Card key={String(c.id)}><h3>{String(c.name)}</h3><Badge tone={c.status === "READY" ? "success" : c.status === "DELETED" ? "neutral" : "warning"}>{String(c.status)}</Badge>
-        <p>{String(c.provider)} · {String(c.resource)}</p><p>Last complete sync: {c.last_success_at ? new Date(String(c.last_success_at)).toLocaleString() : "Never"}.</p>
+        <p>{String(c.provider)} · {c.resource ? String(c.resource) : c.status === "OAUTH_TENANT" ? "Choose an authorized organization" : "No organization selected"}</p><p>Last complete sync: {c.last_success_at ? new Date(String(c.last_success_at)).toLocaleString() : "Never"}.</p>
         {c.last_error && <Alert tone="warning">{String(c.last_error)}. Correct permissions or replace the credential to restart.</Alert>}
+        {c.status === "OAUTH_AUTHORIZING" && <p role="status">Xero authorization is waiting for consent. Complete the Xero page, then return here.</p>}
         <p>Records appear only after a complete successful scan and are withheld after errors, disconnects, or 24 hours without success. Multi-page scans continue automatically; Refresh connections checks progress.</p>
         <div className="org-tabs"><Button disabled={busy || ["UNCONFIGURED", "DISCONNECTED", "FAILED", "REAUTH", "DELETED"].includes(String(c.status))}
           onClick={() => void action(async () => { await orgApi.sync(String(c.id)); })}>Synchronize next page</Button>
           <Button variant="secondary" disabled={busy} onClick={() => void action(() => inspect(c))}>Inspect records & runs</Button>
+          {c.provider === "xero" && ["REAUTH", "DISCONNECTED"].includes(String(c.status)) && <Button variant="secondary" disabled={busy || !catalog.xeroOAuthConfigured || !catalog.credentialStorageReady} onClick={() => void action(async () => { const result = await orgApi.startXeroOAuth(String(c.id)); window.location.assign(result.authorizationUrl); })}>Reconnect Xero</Button>}
           <Button variant="secondary" disabled={busy || ["DISCONNECTED", "DELETED"].includes(String(c.status))} onClick={() => setDisconnecting(String(c.id))}>Disconnect</Button>
           <Button variant="danger" disabled={busy || c.status === "DELETED"} onClick={() => setDeleting(String(c.id))}>Delete connection data</Button></div>
         {disconnecting === c.id && <Alert tone="warning">Disconnect removes the stored credential and hides imported records. Historical rows remain in storage.
@@ -72,6 +88,14 @@ export default function IntegrationsPanel() {
         {deleting === c.id && <Alert tone="danger">Permanently delete this connection and its imported records, facts, and source links? A minimal audit tombstone will remain; this cannot be undone.
           <div className="org-tabs"><Button variant="danger" disabled={busy} onClick={() => void action(async () => { await orgApi.deleteConnectionData(String(c.id)); setDeleting(null); })}>Permanently delete data</Button>
           <Button variant="secondary" disabled={busy} onClick={() => setDeleting(null)}>Cancel</Button></div></Alert>}
+        {c.status === "OAUTH_TENANT" && <Card><h3>Choose a Xero organization</h3><p>The authorized organizations belong to this connection owner. Selecting one starts read-only invoice synchronization.</p>
+          {!xeroTenants[String(c.id)] ? <Button variant="secondary" disabled={busy} onClick={() => void action(async () => { const rows = await orgApi.xeroTenants(String(c.id)); setXeroTenants(current => ({ ...current, [String(c.id)]: rows })); })}>Load authorized organizations</Button> :
+            <form className="org-form" onSubmit={e => { e.preventDefault(); const selected = tenantChoice[String(c.id)]; void action(async () => { await orgApi.selectXeroTenant(String(c.id), selected); }); }}>
+              <Field label="Xero organization">{f => <Select {...f} required value={tenantChoice[String(c.id)] ?? ""} disabled={busy} onChange={e => setTenantChoice(current => ({ ...current, [String(c.id)]: e.target.value }))}>
+                <option value="">Select organization</option>{xeroTenants[String(c.id)].map(t => <option key={String(t.xero_tenant_id)} value={String(t.xero_tenant_id)}>{String(t.tenant_name)}</option>)}</Select>}</Field>
+              <Button type="submit" disabled={busy || !tenantChoice[String(c.id)]}>Confirm organization and sync invoices</Button>
+            </form>}
+        </Card>}
         {c.status !== "DELETED" && <details><summary>Add or replace credential</summary><form className="org-form" onSubmit={e => {
           e.preventDefault(); const form = e.currentTarget; const token = String(new FormData(form).get("token"));
           void action(async () => { await orgApi.credential(String(c.id), token); form.reset(); });
