@@ -106,4 +106,20 @@ class OrganizationPostgresTest {
   assertFalse(access.canReplay(manager,saved));
  }
 
+ @Test void graphAndHistoricalMetricsExcludeHiddenProjectsAndHandleNoCompletions() {
+  var graph=new OrganizationGraph(db,org);var metrics=new OrganizationMetrics(db,org);
+  var empty=metrics.metrics(employee,4);
+  assertNull(((Map<?,?>)empty.get("summary")).get("on_time_rate"));
+  assertEquals(4,((List<?>)empty.get("weekly")).size());
+  String d=department("Graph"),t=team(d),p=project(t,false),secret=project(t,true);
+  tx.execute(x->org.bind(admin,new BindingInput("org:role:manager",manager.id(),"TEAM",null,t)));
+  tx.execute(x->work.saveTask(admin,p,null,new WorkDtos.TaskInput("Visible work","TODO",null,null,null,null)));
+  tx.execute(x->work.saveTask(admin,secret,null,new WorkDtos.TaskInput("Hidden work","TODO",null,null,null,null)));
+  var nodes=graph.graph(manager).toString();assertTrue(nodes.contains("Visible work"));assertFalse(nodes.contains("Hidden work"));
+  var result=metrics.metrics(manager,2);
+  assertEquals(1L,((Map<?,?>)result.get("summary")).get("open_tasks"));
+  assertFalse(graph.graph(outsider).toString().contains("Visible work"));
+  assertThrows(ResponseStatusException.class,()->metrics.metrics(manager,0));
+ }
+
 }

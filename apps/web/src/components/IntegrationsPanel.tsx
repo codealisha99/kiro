@@ -79,6 +79,7 @@ export default function IntegrationsPanel() {
           <p>{r.status ? String(r.status) : "Status not supplied"} · Observed {new Date(String(r.observed_at)).toLocaleString()}</p>
           {r.amount !== null && <p>Recorded amount: {String(r.amount)} {r.currency ? String(r.currency) : "(currency not supplied)"}</p>}
           {r.department && <p>Department: {String(r.department)}. Supervisor reference: {String(r.supervisor_reference ?? "Not supplied")}.</p>}
+          {r.metric && <p>{String(r.metric)}: {String(r.metric_value)} {String(r.metric_currency ?? r.unit)} · {String(r.period_start)} through {String(r.period_end)}. Campaign attribution: {String(r.campaign)}.</p>}
           {r.source_url && <a href={String(r.source_url)} target="_blank" rel="noreferrer">Open provider source</a>}
           {["ISSUE", "TASK", "PULL_REQUEST", "MESSAGE"].includes(String(r.kind)) && <Button variant="secondary" disabled={busy} onClick={() => void action(() => startMapping(r))}>Link to project work</Button>}</div></li>)}</ul>
         <div className="org-tabs"><Button variant="secondary" disabled={busy || !offset} onClick={() => void action(() => inspect(selected, offset - 100))}>Previous records</Button>

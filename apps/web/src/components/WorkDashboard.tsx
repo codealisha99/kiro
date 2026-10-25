@@ -7,6 +7,7 @@ import "./work-dashboard.css";
 import { orgApi, type DataRow } from "@/lib/organization-api";
 import ProjectSources from "./ProjectSources";
 import ProjectPlanning from "./ProjectPlanning";
+import ProjectActions from "./ProjectActions";
 
 const emptyTask = { title: "", status: "TODO" as WorkTask["status"], assigneeId: "", remainingHours: "", dueDate: "" };
 const labels = { OVERDUE: "Overdue commitment", BLOCKED: "Recorded blocker", UNASSIGNED: "Ownership gap" };
@@ -170,6 +171,7 @@ export default function WorkDashboard() {
           {detail.project.can_write && <Button disabled={busy} onClick={() => editTask()}>Add task</Button>}
         </div></div>
       <details><summary>Planning, goals and capacity</summary><ProjectPlanning key={detail.project.id} detail={detail} projects={projects} /></details>
+      <details><summary>Approved provider actions</summary><ProjectActions key={detail.project.id} detail={detail} /></details>
       <ProjectSources key={detail.project.id} projectId={detail.project.id} canWrite={!!detail.project.can_write} />
       {!detail.tasks.length && <p>No tasks on this page.</p>}
       <ul className="work-list">{detail.tasks.map(t => <li key={t.id}>

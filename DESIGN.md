@@ -4,6 +4,12 @@
 
 Company dashboards retain the existing editorial surfaces and shared controls. Show only granted dashboard views, label the calculated scope, and keep missing-data methodology beside metrics. Organization setup uses labeled forms and scrollable tables. Connected applications display actual sync state and explicit unconfigured states; a saved resource without credentials must never look connected. Page composition lives in `components/organization.css` and uses semantic tokens in both preview themes.
 
+## Work planning and company explorer — 2026-10-25
+
+Project planning, source mapping, and provider actions stay inside the selected project's detail view. Clearly label estimates, declared availability, and prorated commitments so they cannot be mistaken for observed utilization. A provider action shows the exact content and repository, the independent review, and a separate final execution confirmation. Show uncertain provider outcomes with the marker needed for manual lookup.
+
+The organization explorer is a bounded, permission-filtered view over stored work and organization relationships. Keep the current scope and metric method beside the tables. Entity traversal uses labeled native controls and a readable relationship list; retain overflow-safe wrapping and semantic tokens in both themes.
+
 ## Product and direction
 
 Kiro is an internal company knowledge desk. Teams ask questions, read answers, and inspect the authorized evidence beside them. The first impression should be **trustworthy and calm**, confirmed by the user on 2026-10-07.

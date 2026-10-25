@@ -8,10 +8,12 @@ import static com.kiro.api.organization.OrganizationService.*;
 @RestController
 @RequestMapping("/organization")
 public class OrganizationController {
-  private final OrganizationService org; private final OrganizationDashboard dashboard;
-  public OrganizationController(OrganizationService org,OrganizationDashboard dashboard) { this.org=org;this.dashboard=dashboard; }
+  private final OrganizationService org; private final OrganizationDashboard dashboard; private final OrganizationGraph graph; private final OrganizationMetrics metrics;
+  public OrganizationController(OrganizationService org,OrganizationDashboard dashboard,OrganizationGraph graph,OrganizationMetrics metrics) { this.org=org;this.dashboard=dashboard;this.graph=graph;this.metrics=metrics; }
   @GetMapping public Object setup(@AuthenticationPrincipal AuthenticatedPrincipal u) { return org.setup(u); }
   @GetMapping("/dashboard") public Object dashboard(@AuthenticationPrincipal AuthenticatedPrincipal u,@RequestParam(defaultValue="EMPLOYEE") String view) { return dashboard.dashboard(u,view); }
+  @GetMapping("/graph") public Object graph(@AuthenticationPrincipal AuthenticatedPrincipal u) { return graph.graph(u); }
+  @GetMapping("/metrics") public Object metrics(@AuthenticationPrincipal AuthenticatedPrincipal u,@RequestParam(required=false) Integer weeks) { return metrics.metrics(u,weeks); }
   @GetMapping("/my-teams") public Object teams(@AuthenticationPrincipal AuthenticatedPrincipal u) { return org.myTeams(u); }
   @GetMapping("/audit") public Object audit(@AuthenticationPrincipal AuthenticatedPrincipal u) { return org.auditHistory(u); }
   @PostMapping("/departments") public Object department(@AuthenticationPrincipal AuthenticatedPrincipal u,@Valid @RequestBody NameInput b) { return org.department(u,b); }
