@@ -18,6 +18,7 @@ import org.testcontainers.utility.DockerImageName;
 class IntegrationPostgresTest {
  @Container static final PostgreSQLContainer<?> pg=new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
  static JdbcTemplate db;static IntegrationService service;static OrganizationService org;static CredentialVault vault;
+ static XeroWebhookService webhookService;
  static final AtomicReference<ProviderGateway.Transport> remote=new AtomicReference<>();
  static AuthenticatedPrincipal owner=new AuthenticatedPrincipal("owner","owner@test","org","admin");
  static AuthenticatedPrincipal otherAdmin=new AuthenticatedPrincipal("otherAdmin","admin@test","org","admin");
@@ -26,7 +27,9 @@ class IntegrationPostgresTest {
   var ds=new DriverManagerDataSource(pg.getJdbcUrl()+"&stringtype=unspecified",pg.getUsername(),pg.getPassword());Flyway.configure().dataSource(ds).load().migrate();
   db=new JdbcTemplate(ds);var json=new ObjectMapper().findAndRegisterModules();org=new OrganizationService(db,json);
   vault=new CredentialVault(Base64.getEncoder().encodeToString(new byte[32]));
-  service=new IntegrationService(db,org,vault,new ProviderGateway(json,r->remote.get().send(r),"client-id","client-secret","https://kiro.example/integrations/xero/callback","google-client","google-secret","https://kiro.example/integrations/googleanalytics/callback"),new DataSourceTransactionManager(ds));
+  var manager=new DataSourceTransactionManager(ds);
+  service=new IntegrationService(db,org,vault,new ProviderGateway(json,r->remote.get().send(r),"client-id","client-secret","https://kiro.example/integrations/xero/callback","google-client","google-secret","https://kiro.example/integrations/googleanalytics/callback"),manager);
+  webhookService=new XeroWebhookService(db,json,"synthetic-xero-webhook-key",manager);
   db.execute("INSERT INTO \"Tenant\"(id,name) VALUES ('org','Synthetic'),('other','Other')");
   for(var u:List.of(owner,otherAdmin,outsider))db.update("INSERT INTO users(id,\"tenantId\",email,role) VALUES (?,?,?,?)",u.id(),u.tenantId(),u.email(),u.roleUpper());
  }
@@ -161,5 +164,30 @@ class IntegrationPostgresTest {
    assertEquals("OWNER_PERMISSION_REVOKED",db.queryForObject("SELECT last_error FROM provider_connections WHERE id=?",String.class,id));
    assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_records",Long.class));
   } finally { db.update("UPDATE users SET role='ADMIN' WHERE id='owner'"); }
+ }
+ @Test void signedXeroEventsAreDeduplicatedDurableAndTriggerReconciliation() throws Exception {
+  String xeroTenant="12345678-1234-1234-1234-123456789012";
+  String id=(String)service.create(owner,new IntegrationService.ConnectionInput("xero","Synthetic Xero",xeroTenant,"","xero-access-token")).get("id");
+  db.update("INSERT INTO provider_oauth_tenants(tenant_id,connection_id,xero_tenant_id,tenant_name) VALUES ('org',?,?,?)",id,xeroTenant,"Synthetic Xero");
+  String body="{\"events\":[{\"resourceId\":\"invoice-123\",\"eventDateUtc\":\"2026-10-25T10:00:00.000\",\"eventType\":\"Update\",\"eventCategory\":\"INVOICE\",\"tenantId\":\""+xeroTenant+"\",\"tenantType\":\"ORGANISATION\"}],\"lastEventSequence\":7,\"firstEventSequence\":7,\"entropy\":\"synthetic\"}";
+  byte[] bytes=body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+  String signature=XeroWebhookServiceTest.sign(bytes,"synthetic-xero-webhook-key");
+  assertThrows(ResponseStatusException.class,()->webhookService.receive(bytes,"invalid"));
+  assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_webhook_events",Long.class));
+  webhookService.receive(bytes,signature);webhookService.receive(bytes,signature);
+  assertEquals(1L,db.queryForObject("SELECT count(*) FROM provider_webhook_events",Long.class));
+  assertEquals("RECEIVED",db.queryForObject("SELECT status FROM provider_webhook_events WHERE connection_id=?",String.class,id));
+  assertTrue(db.queryForObject("SELECT sync_requested FROM provider_connections WHERE id=?",Boolean.class,id));
+  remote.set(r->{assertEquals("Bearer xero-access-token",r.headers().firstValue("Authorization").orElseThrow());return new ProviderGateway.Reply(200,"{\"Invoices\":[{\"InvoiceID\":\"invoice-123\",\"InvoiceNumber\":\"INV-123\",\"Total\":25,\"CurrencyCode\":\"USD\"}]}","60");});
+  service.poll();
+  assertEquals("RECONCILED",db.queryForObject("SELECT status FROM provider_webhook_events WHERE connection_id=?",String.class,id));
+  assertFalse(db.queryForObject("SELECT sync_requested FROM provider_connections WHERE id=?",Boolean.class,id));
+  assertEquals("READY",status(id));assertEquals(1,((List<?>)service.records(owner,id,0)).size());
+  service.deleteData(owner,id);assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_webhook_events WHERE connection_id=?",Long.class,id));
+ }
+ @Test void signedXeroIntentHandshakeIsAcceptedWithoutCreatingEvents() throws Exception {
+  byte[] intent="{\"events\":[],\"lastEventSequence\":0,\"firstEventSequence\":0,\"entropy\":\"handshake\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+  webhookService.receive(intent,XeroWebhookServiceTest.sign(intent,"synthetic-xero-webhook-key"));
+  assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_webhook_events",Long.class));
  }
 }

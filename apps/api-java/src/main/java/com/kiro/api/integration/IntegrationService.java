@@ -212,8 +212,9 @@ public class IntegrationService {
       db.update("DELETE FROM provider_financial_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
       db.update("DELETE FROM provider_people_facts WHERE tenant_id=? AND record_id IN (SELECT id FROM provider_records WHERE tenant_id=? AND connection_id=?)",u.tenantId(),u.tenantId(),id);
       db.update("DELETE FROM provider_records WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
+      db.update("DELETE FROM provider_webhook_events WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
       db.update("DELETE FROM provider_oauth_tenants WHERE tenant_id=? AND connection_id=?",u.tenantId(),id);
-      db.update("UPDATE provider_connections SET encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,status='DELETED',name='Deleted connection',resource='',account_id='',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,last_error=NULL,next_sync_at=now()+interval '100 years',updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
+      db.update("UPDATE provider_connections SET encrypted_token=NULL,encrypted_refresh_token=NULL,access_token_expires_at=NULL,status='DELETED',name='Deleted connection',resource='',account_id='',cursor=NULL,generation=NULL,lease_id=NULL,lease_until=NULL,sync_requested=false,oauth_state_hash=NULL,oauth_state_expires_at=NULL,encrypted_pkce_verifier=NULL,last_error=NULL,next_sync_at=now()+interval '100 years',updated_at=now() WHERE tenant_id=? AND id=? AND owner_id=?",u.tenantId(),id,u.id());
       org.audit(u,"CONNECTION_DATA_DELETED",Map.of("id",id));
     });
   }
@@ -244,7 +245,7 @@ public class IntegrationService {
   public void poll() {
     var ids=db.queryForList("""
       SELECT id FROM provider_connections WHERE encrypted_token IS NOT NULL AND status IN ('PENDING','READY','SYNCING','RETRY')
-        AND next_sync_at<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync_at LIMIT 10
+        AND (sync_requested OR next_sync_at<=now()) AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync_at LIMIT 10
       """,String.class);
     ids.forEach(this::syncPage);
   }
@@ -253,7 +254,7 @@ public class IntegrationService {
     Map<String,Object> c=tx.execute(t->{
       var rows=db.queryForList("""
         SELECT * FROM provider_connections WHERE id=? AND encrypted_token IS NOT NULL
-        AND status IN ('PENDING','READY','SYNCING','RETRY') AND next_sync_at<=now()
+        AND status IN ('PENDING','READY','SYNCING','RETRY') AND (sync_requested OR next_sync_at<=now())
         AND (lease_until IS NULL OR lease_until<now()) FOR UPDATE SKIP LOCKED
         """,id);
       if(rows.isEmpty())return null;
@@ -266,11 +267,15 @@ public class IntegrationService {
         return null;
       }
       String generation=(String)row.get("generation");
+      if ("xero".equals(row.get("provider"))) {
+        db.update("UPDATE provider_webhook_events SET status='RECEIVED' WHERE connection_id=? AND status='PROCESSING'",id);
+        db.update("UPDATE provider_webhook_events SET status='PROCESSING' WHERE connection_id=? AND status='RECEIVED'",id);
+      }
       if(generation==null || "READY".equals(row.get("status"))) {
         generation=UUID.randomUUID().toString();row.put("generation",generation);row.put("cursor",null);
         db.update("INSERT INTO provider_sync_runs(id,tenant_id,connection_id,status) VALUES (?,?,?,'RUNNING')",generation,row.get("tenant_id"),id);
       }
-      db.update("UPDATE provider_connections SET status='SYNCING',generation=?,cursor=?,lease_id=?,lease_until=now()+interval '2 minutes',updated_at=now() WHERE id=?",generation,row.get("cursor"),lease,id);
+      db.update("UPDATE provider_connections SET status='SYNCING',generation=?,cursor=?,sync_requested=false,lease_id=?,lease_until=now()+interval '2 minutes',updated_at=now() WHERE id=?",generation,row.get("cursor"),lease,id);
       return row;
     });
     if(c==null)return;
@@ -301,7 +306,10 @@ public class IntegrationService {
         if(page.nextCursor()==null) {
           db.update("UPDATE provider_records SET deleted_at=now() WHERE connection_id=? AND generation<>? AND deleted_at IS NULL",id,c.get("generation"));
           db.update("UPDATE provider_sync_runs SET status='SUCCEEDED',finished_at=now(),error_code=NULL WHERE id=?",c.get("generation"));
-          db.update("UPDATE provider_connections SET status='READY',cursor=NULL,last_success_at=now(),next_sync_at=now()+interval '15 minutes',failure_count=0,last_error=NULL,lease_id=NULL,lease_until=NULL WHERE id=?",id);
+          db.update("UPDATE provider_webhook_events SET status='RECONCILED' WHERE connection_id=? AND status='PROCESSING'",id);
+          boolean requested=db.queryForObject("SELECT sync_requested FROM provider_connections WHERE id=?",Boolean.class,id);
+          if(requested) db.update("UPDATE provider_connections SET status='PENDING',cursor=NULL,generation=NULL,last_success_at=now(),next_sync_at=now(),failure_count=0,last_error=NULL,lease_id=NULL,lease_until=NULL WHERE id=?",id);
+          else db.update("UPDATE provider_connections SET status='READY',cursor=NULL,last_success_at=now(),next_sync_at=now()+interval '15 minutes',failure_count=0,last_error=NULL,lease_id=NULL,lease_until=NULL WHERE id=?",id);
         } else db.update("UPDATE provider_connections SET status='PENDING',cursor=?,next_sync_at=now()+interval '60 seconds',failure_count=0,last_error=NULL,lease_id=NULL,lease_until=NULL WHERE id=?",page.nextCursor(),id);
       });
     } catch(Exception e) {
@@ -309,6 +317,7 @@ public class IntegrationService {
       tx.executeWithoutResult(t->{
         var rows=db.queryForList("SELECT failure_count FROM provider_connections WHERE id=? AND lease_id=? FOR UPDATE",id,lease);
         if(rows.isEmpty())return;
+        if("xero".equals(c.get("provider")))db.update("UPDATE provider_webhook_events SET status='RECEIVED' WHERE connection_id=? AND status='PROCESSING'",id);
         int attempts=((Number)rows.getFirst().get("failure_count")).intValue()+1;
         boolean retry=failure.retryable && attempts<5;
         boolean refreshFailure=failure.code.startsWith("XERO_REFRESH_")||failure.code.startsWith("GOOGLE_REFRESH_");
