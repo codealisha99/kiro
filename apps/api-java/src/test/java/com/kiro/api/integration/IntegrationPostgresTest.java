@@ -26,7 +26,7 @@ class IntegrationPostgresTest {
   var ds=new DriverManagerDataSource(pg.getJdbcUrl()+"&stringtype=unspecified",pg.getUsername(),pg.getPassword());Flyway.configure().dataSource(ds).load().migrate();
   db=new JdbcTemplate(ds);var json=new ObjectMapper().findAndRegisterModules();org=new OrganizationService(db,json);
   vault=new CredentialVault(Base64.getEncoder().encodeToString(new byte[32]));
-  service=new IntegrationService(db,org,vault,new ProviderGateway(json,r->remote.get().send(r),"client-id","client-secret","https://kiro.example/integrations/xero/callback"),new DataSourceTransactionManager(ds));
+  service=new IntegrationService(db,org,vault,new ProviderGateway(json,r->remote.get().send(r),"client-id","client-secret","https://kiro.example/integrations/xero/callback","google-client","google-secret","https://kiro.example/integrations/googleanalytics/callback"),new DataSourceTransactionManager(ds));
   db.execute("INSERT INTO \"Tenant\"(id,name) VALUES ('org','Synthetic'),('other','Other')");
   for(var u:List.of(owner,otherAdmin,outsider))db.update("INSERT INTO users(id,\"tenantId\",email,role) VALUES (?,?,?,?)",u.id(),u.tenantId(),u.email(),u.roleUpper());
  }
@@ -122,6 +122,26 @@ class IntegrationPostgresTest {
   service.sync(owner,id);assertEquals("READY",status(id));assertEquals(2,requests.size());
   assertTrue(db.queryForObject("SELECT encrypted_refresh_token FROM provider_connections WHERE id=?",String.class,id).length()>30);
   assertFalse(db.queryForObject("SELECT encrypted_refresh_token FROM provider_connections WHERE id=?",String.class,id).contains("xero-refresh-2"));
+ }
+ @Test void googleAnalyticsOauthIsOwnerBoundAndRefreshesWithoutReplacingUnrotatedRefreshToken() throws Exception {
+  String id=(String)service.create(owner,new IntegrationService.ConnectionInput("googleanalytics","Marketing property","12345","",null)).get("id");
+  var started=service.startGoogleAnalyticsOAuth(owner,id);String query=java.net.URI.create(started.authorizationUrl()).getRawQuery();
+  String state=Arrays.stream(query.split("&")).filter(p->p.startsWith("state=")).map(p->java.net.URLDecoder.decode(p.substring(6),java.nio.charset.StandardCharsets.UTF_8)).findFirst().orElseThrow();
+  assertEquals("OAUTH_AUTHORIZING",status(id));assertTrue(db.queryForObject("SELECT encrypted_pkce_verifier FROM provider_connections WHERE id=?",String.class,id).contains("."));
+  remote.set(r->new ProviderGateway.Reply(200,"{\"access_token\":\"ga-access-1\",\"refresh_token\":\"ga-refresh-1\",\"expires_in\":1800,\"scope\":\"https://www.googleapis.com/auth/analytics.readonly\"}","60"));
+  assertEquals(id,service.completeGoogleAnalyticsOAuth(state,"google-auth-code"));assertEquals("PENDING",status(id));
+  assertFalse(db.queryForObject("SELECT encrypted_token FROM provider_connections WHERE id=?",String.class,id).contains("ga-access-1"));
+  String storedRefresh=db.queryForObject("SELECT encrypted_refresh_token FROM provider_connections WHERE id=?",String.class,id);
+  assertFalse(storedRefresh.contains("ga-refresh-1"));assertEquals("ga-refresh-1",vault.decrypt(storedRefresh,"org:"+id+":googleanalytics-refresh"));
+  assertThrows(ResponseStatusException.class,()->service.completeGoogleAnalyticsOAuth(state,"replay"));
+  assertThrows(ResponseStatusException.class,()->service.startGoogleAnalyticsOAuth(otherAdmin,id));
+  db.update("UPDATE provider_connections SET access_token_expires_at=now()-interval '1 second',next_sync_at=now() WHERE id=?",id);
+  var requests=new ArrayList<java.net.http.HttpRequest>();
+  remote.set(r->{requests.add(r);if(r.uri().getHost().equals("oauth2.googleapis.com"))return new ProviderGateway.Reply(200,"{\"access_token\":\"ga-access-2\",\"expires_in\":1800}","60");
+    assertEquals("Bearer ga-access-2",r.headers().firstValue("Authorization").orElseThrow());return new ProviderGateway.Reply(200,"{\"rowCount\":0}","60");});
+  service.sync(owner,id);assertEquals("READY",status(id));assertEquals(2,requests.size());
+  String refreshed=db.queryForObject("SELECT encrypted_refresh_token FROM provider_connections WHERE id=?",String.class,id);
+  assertEquals("ga-refresh-1",vault.decrypt(refreshed,"org:"+id+":googleanalytics-refresh"));assertFalse(refreshed.contains("ga-refresh-1"));
  }
  @Test void partialScanWithholdsRecordsAndContinuesStoredCursor() {
   String id=connection("secret-test-token");var records=new ArrayList<String>();for(int i=0;i<100;i++)records.add("{\"id\":"+i+",\"title\":\"Task\"}");

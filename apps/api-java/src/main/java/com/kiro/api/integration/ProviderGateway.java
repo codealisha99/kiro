@@ -32,15 +32,23 @@ public class ProviderGateway {
   }
   private final ObjectMapper json; private final Transport transport;
   private final String xeroClientId,xeroClientSecret,xeroRedirectUri;
+  private final String googleClientId,googleClientSecret,googleRedirectUri;
   public record XeroTokens(String accessToken,String refreshToken,int expiresIn) {}
+  public record GoogleTokens(String accessToken,String refreshToken,int expiresIn) {}
   public record XeroTenant(String tenantId,String tenantName) {}
   @Autowired public ProviderGateway(ObjectMapper json,@Value("${XERO_CLIENT_ID:}") String clientId,
-      @Value("${XERO_CLIENT_SECRET:}") String clientSecret,@Value("${XERO_REDIRECT_URI:}") String redirectUri) {
-    this(json,new HttpTransport(),clientId,clientSecret,redirectUri);
+      @Value("${XERO_CLIENT_SECRET:}") String clientSecret,@Value("${XERO_REDIRECT_URI:}") String redirectUri,
+      @Value("${GOOGLE_ANALYTICS_CLIENT_ID:}") String googleId,@Value("${GOOGLE_ANALYTICS_CLIENT_SECRET:}") String googleSecret,
+      @Value("${GOOGLE_ANALYTICS_REDIRECT_URI:}") String googleRedirect) {
+    this(json,new HttpTransport(),clientId,clientSecret,redirectUri,googleId,googleSecret,googleRedirect);
   }
   ProviderGateway(ObjectMapper json,Transport transport) { this(json,transport,"","",""); }
   ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri) {
+    this(json,transport,clientId,clientSecret,redirectUri,"","","");
+  }
+  ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri,String googleId,String googleSecret,String googleRedirect) {
     this.json=json;this.transport=transport;this.xeroClientId=clientId;this.xeroClientSecret=clientSecret;this.xeroRedirectUri=redirectUri;
+    this.googleClientId=googleId;this.googleClientSecret=googleSecret;this.googleRedirectUri=googleRedirect;
   }
   public boolean xeroOAuthConfigured() {
     if(xeroClientId.isBlank()||xeroClientSecret.isBlank()||xeroRedirectUri.isBlank())return false;
@@ -53,6 +61,50 @@ public class ProviderGateway {
       String challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
       return "https://login.xero.com/identity/connect/authorize?response_type=code&client_id="+q(xeroClientId)+"&redirect_uri="+q(xeroRedirectUri)+"&scope="+q("accounting.transactions.read offline_access")+"&state="+q(state)+"&code_challenge="+q(challenge)+"&code_challenge_method=S256";
     } catch(Exception e){throw new IllegalStateException("Could not prepare Xero authorization");}
+  }
+  public boolean googleAnalyticsOAuthConfigured() { return validOAuthClient(googleClientId,googleClientSecret,googleRedirectUri); }
+  public String googleAnalyticsAuthorizationUrl(String state,String verifier) {
+    if(!googleAnalyticsOAuthConfigured())throw new ProviderFailure("GOOGLE_ANALYTICS_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      String challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+      return "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id="+q(googleClientId)+"&redirect_uri="+q(googleRedirectUri)
+          +"&scope="+q("https://www.googleapis.com/auth/analytics.readonly")+"&access_type=offline&include_granted_scopes=true&prompt=consent&state="+q(state)
+          +"&code_challenge="+q(challenge)+"&code_challenge_method=S256";
+    } catch(Exception e){throw new IllegalStateException("Could not prepare Google Analytics authorization");}
+  }
+  public GoogleTokens exchangeGoogleAnalyticsCode(String code,String verifier) {
+    return googleTokenRequest(Map.of("grant_type","authorization_code","code",code,"redirect_uri",googleRedirectUri,"code_verifier",verifier),false,null);
+  }
+  public GoogleTokens refreshGoogleAnalyticsToken(String refreshToken) {
+    return googleTokenRequest(Map.of("grant_type","refresh_token","refresh_token",refreshToken),true,refreshToken);
+  }
+  private GoogleTokens googleTokenRequest(Map<String,String> fields,boolean refresh,String existingRefreshToken) {
+    if(!googleAnalyticsOAuthConfigured())throw new ProviderFailure("GOOGLE_ANALYTICS_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      var form=new HashMap<>(fields);form.put("client_id",googleClientId);form.put("client_secret",googleClientSecret);
+      String body=form.entrySet().stream().map(e->q(e.getKey())+"="+q(e.getValue())).collect(java.util.stream.Collectors.joining("&"));
+      var req=HttpRequest.newBuilder(URI.create("https://oauth2.googleapis.com/token")).timeout(Duration.ofSeconds(20))
+          .header("Accept","application/json").header("Content-Type","application/x-www-form-urlencoded")
+          .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+      Reply reply=transport.send(req);
+      if(reply.status()<200||reply.status()>=300) {
+        String code=refresh?(reply.status()==400?"GOOGLE_REFRESH_REAUTH":"GOOGLE_REFRESH_OUTCOME_UNKNOWN"):"GOOGLE_OAUTH_EXCHANGE_FAILED";
+        throw new ProviderFailure(code,false,0);
+      }
+      JsonNode token=json.readTree(reply.body());String access=required(token,"access_token");int expiry=token.path("expires_in").asInt(0);
+      String rotated=text(token,"refresh_token"),refreshToken=rotated==null||rotated.isBlank()?existingRefreshToken:rotated;
+      if(expiry<1||refreshToken==null||refreshToken.isBlank())throw new ProviderFailure(refresh?"GOOGLE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_OAUTH_REFRESH_TOKEN_MISSING",false,0);
+      if(!refresh&&!Arrays.asList(required(token,"scope").split("\\s+")).contains("https://www.googleapis.com/auth/analytics.readonly"))throw new ProviderFailure("GOOGLE_OAUTH_SCOPE_NOT_GRANTED",false,0);
+      return new GoogleTokens(access,refreshToken,expiry);
+    } catch(ProviderFailure e){throw e;}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new ProviderFailure(refresh?"GOOGLE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_OAUTH_EXCHANGE_FAILED",false,0);}
+    catch(Exception e){throw new ProviderFailure(refresh?"GOOGLE_REFRESH_OUTCOME_UNKNOWN":"GOOGLE_OAUTH_EXCHANGE_FAILED",false,0);}
+  }
+  private static boolean validOAuthClient(String id,String secret,String redirect) {
+    if(id==null||id.isBlank()||secret==null||secret.isBlank()||redirect==null||redirect.isBlank())return false;
+    try {var u=URI.create(redirect);String host=u.getHost();boolean local=host!=null&&Set.of("localhost","127.0.0.1").contains(host);
+      return ("https".equals(u.getScheme())||local&&"http".equals(u.getScheme()))&&host!=null&&u.getUserInfo()==null&&u.getFragment()==null&&u.getQuery()==null;
+    } catch(Exception e){return false;}
   }
   public XeroTokens exchangeXeroCode(String code,String verifier) { return xeroTokenRequest(Map.of("grant_type","authorization_code","code",code,"redirect_uri",xeroRedirectUri,"code_verifier",verifier),false); }
   public XeroTokens refreshXeroToken(String refreshToken) { return xeroTokenRequest(Map.of("grant_type","refresh_token","refresh_token",refreshToken),true); }
