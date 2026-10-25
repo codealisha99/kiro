@@ -19,6 +19,7 @@ class IntegrationPostgresTest {
  @Container static final PostgreSQLContainer<?> pg=new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
  static JdbcTemplate db;static IntegrationService service;static OrganizationService org;static CredentialVault vault;
  static XeroWebhookService webhookService;
+ static ProviderWebhookRetentionService retentionService;
  static final AtomicReference<ProviderGateway.Transport> remote=new AtomicReference<>();
  static AuthenticatedPrincipal owner=new AuthenticatedPrincipal("owner","owner@test","org","admin");
  static AuthenticatedPrincipal otherAdmin=new AuthenticatedPrincipal("otherAdmin","admin@test","org","admin");
@@ -30,6 +31,7 @@ class IntegrationPostgresTest {
   var manager=new DataSourceTransactionManager(ds);
   service=new IntegrationService(db,org,vault,new ProviderGateway(json,r->remote.get().send(r),"client-id","client-secret","https://kiro.example/integrations/xero/callback","google-client","google-secret","https://kiro.example/integrations/googleanalytics/callback"),manager);
   webhookService=new XeroWebhookService(db,json,"synthetic-xero-webhook-key",manager);
+  retentionService=new ProviderWebhookRetentionService(db,90,manager);
   db.execute("INSERT INTO \"Tenant\"(id,name) VALUES ('org','Synthetic'),('other','Other')");
   for(var u:List.of(owner,otherAdmin,outsider))db.update("INSERT INTO users(id,\"tenantId\",email,role) VALUES (?,?,?,?)",u.id(),u.tenantId(),u.email(),u.roleUpper());
  }
@@ -183,6 +185,11 @@ class IntegrationPostgresTest {
   assertEquals("RECONCILED",db.queryForObject("SELECT status FROM provider_webhook_events WHERE connection_id=?",String.class,id));
   assertFalse(db.queryForObject("SELECT sync_requested FROM provider_connections WHERE id=?",Boolean.class,id));
   assertEquals("READY",status(id));assertEquals(1,((List<?>)service.records(owner,id,0)).size());
+  db.update("INSERT INTO provider_webhook_events(id,tenant_id,connection_id,provider,event_sequence,resource_id,event_category,event_type,status,received_at) VALUES (?,?,?,?,?,?,?,?,?,now()-interval '91 days')",UUID.randomUUID().toString(),"org",id,"xero",8L,"invoice-456","INVOICE","UPDATE","RECEIVED");
+  db.update("UPDATE provider_webhook_events SET received_at=now()-interval '91 days' WHERE connection_id=?",id);
+  assertEquals(1,retentionService.purgeExpired());
+  assertEquals(1L,db.queryForObject("SELECT count(*) FROM provider_webhook_events WHERE connection_id=?",Long.class,id));
+  assertEquals("RECEIVED",db.queryForObject("SELECT status FROM provider_webhook_events WHERE connection_id=?",String.class,id));
   service.deleteData(owner,id);assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_webhook_events WHERE connection_id=?",Long.class,id));
  }
  @Test void signedXeroIntentHandshakeIsAcceptedWithoutCreatingEvents() throws Exception {
