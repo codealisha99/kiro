@@ -12,13 +12,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.util.Set;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController @RequestMapping("/integrations") @Validated
 public class IntegrationController {
   private final IntegrationService service;
+  private final XeroWebhookService webhooks;
   private final String webUrl;
-  public IntegrationController(IntegrationService service,@Value("${KIRO_WEB_URL:http://localhost:3000}") String webUrl) {
-    this.service=service;this.webUrl=webUrl;
+  public IntegrationController(IntegrationService service,XeroWebhookService webhooks,@Value("${KIRO_WEB_URL:http://localhost:3000}") String webUrl) {
+    this.service=service;this.webhooks=webhooks;this.webUrl=webUrl;
     try {var uri=URI.create(webUrl);String host=uri.getHost();boolean local=host!=null&&Set.of("localhost","127.0.0.1").contains(host);
       if(host==null||!("https".equals(uri.getScheme())||local&&"http".equals(uri.getScheme()))||uri.getUserInfo()!=null||uri.getFragment()!=null)
         throw new IllegalStateException("KIRO_WEB_URL must be an HTTPS origin (HTTP is allowed on localhost)");
@@ -42,6 +44,12 @@ public class IntegrationController {
   @GetMapping("/googleanalytics/callback") public ResponseEntity<Void> googleAnalyticsCallback(@RequestParam(required=false) String state,@RequestParam(required=false) String code,@RequestParam(required=false) String error) {
     boolean success=false;try { service.completeGoogleAnalyticsOAuth(state,error==null?code:null);success=true; } catch(org.springframework.web.server.ResponseStatusException ignored) { }
     return oauthRedirect("googleanalytics",success);
+  }
+  @PostMapping("/xero/webhook") public ResponseEntity<Void> xeroWebhook(HttpServletRequest request,@RequestHeader(value="x-xero-signature",required=false) String signature) throws java.io.IOException {
+    if(request.getContentLengthLong()>XeroWebhookService.MAX_BODY_BYTES)throw new org.springframework.web.server.ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Xero webhook payload is too large");
+    byte[] body=request.getInputStream().readNBytes(XeroWebhookService.MAX_BODY_BYTES+1);
+    webhooks.receive(body,signature);
+    return ResponseEntity.ok().build();
   }
   private ResponseEntity<Void> oauthRedirect(String provider,boolean success) {
     URI target=UriComponentsBuilder.fromUriString(webUrl).replacePath("/app").replaceQuery(null).queryParam("integration",provider).queryParam("oauth",success?"success":"error").build().toUri();
