@@ -46,6 +46,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login").permitAll()
             .requestMatchers(HttpMethod.GET, "/integrations/xero/callback").permitAll()
             .requestMatchers(HttpMethod.GET, "/integrations/googleanalytics/callback").permitAll()
+            .requestMatchers(HttpMethod.GET, "/integrations/googledrive/callback").permitAll()
             .requestMatchers(HttpMethod.POST, "/integrations/xero/webhook").permitAll()
             .requestMatchers(HttpMethod.GET, "/health", "/actuator/health", "/actuator/info").permitAll()
             // Everything else (incl. /metrics, /admin/health-less, /evals) requires auth;

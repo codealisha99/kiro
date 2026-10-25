@@ -13,7 +13,7 @@ export interface DashboardData {
   teams?: DataRow[]; departments?: DataRow[]; reports?: DataRow[]; dependencies?: DataRow[]; resourceGaps?: DataRow[];
 }
 export interface Provider { id: string; name: string; resourceLabel: string; accountLabel: string; entities: string; permissions: string; sync: string; visibility: string }
-export interface Catalog { canManage: boolean; credentialStorageReady: boolean; xeroOAuthConfigured: boolean; googleAnalyticsOAuthConfigured: boolean; providers: Provider[] }
+export interface Catalog { canManage: boolean; credentialStorageReady: boolean; xeroOAuthConfigured: boolean; googleAnalyticsOAuthConfigured: boolean; googleDriveOAuthConfigured: boolean; providers: Provider[] }
 export const orgApi = {
   setup: () => request<OrgSetup>("/organization"),
   dashboard: (view: DashboardView) => request<DashboardData>(`/organization/dashboard?view=${view}`),
@@ -26,6 +26,7 @@ export const orgApi = {
   createConnection: (body: unknown) => request<{ id: string }>("/integrations", { method: "POST", body }),
   startXeroOAuth: (id: string) => request<{ authorizationUrl: string }>(`/integrations/${encodeURIComponent(id)}/xero/authorize`, { method: "POST" }),
   startGoogleAnalyticsOAuth: (id: string) => request<{ authorizationUrl: string }>(`/integrations/${encodeURIComponent(id)}/googleanalytics/authorize`, { method: "POST" }),
+  startGoogleDriveOAuth: (id: string) => request<{ authorizationUrl: string }>(`/integrations/${encodeURIComponent(id)}/googledrive/authorize`, { method: "POST" }),
   xeroTenants: (id: string) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/xero/tenants`),
   selectXeroTenant: (id: string, tenantId: string) => request(`/integrations/${encodeURIComponent(id)}/xero/tenant`, { method: "POST", body: { tenantId } }),
   credential: (id: string, token: string) => request(`/integrations/${encodeURIComponent(id)}/credential`, { method: "PUT", body: { token } }),

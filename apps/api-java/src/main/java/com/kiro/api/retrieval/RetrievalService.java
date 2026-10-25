@@ -68,6 +68,10 @@ public class RetrievalService {
           AND NOT EXISTS (SELECT 1 FROM "document_versions" newer
             WHERE newer."documentId" = d."id" AND newer."approvalStatus" = 'APPROVED'
               AND newer."version" > dv."version")
+          AND (s."type" <> 'PROVIDER' OR EXISTS (
+            SELECT 1 FROM provider_connections pc WHERE pc.provider_source_id=d."sourceId"
+              AND pc.status='READY' AND pc.last_success_at>now()-interval '24 hours'
+          ))
         """ + aclPredicate() + """
         ORDER BY dc."embedding" <=> ?::vector
         LIMIT """ + " " + SEMANTIC_LIMIT;
@@ -92,6 +96,10 @@ public class RetrievalService {
             WHERE newer."documentId" = d."id" AND newer."approvalStatus" = 'APPROVED'
               AND newer."version" > dv."version")
           AND to_tsvector('english', dc."content") @@ plainto_tsquery('english', ?)
+          AND (s."type" <> 'PROVIDER' OR EXISTS (
+            SELECT 1 FROM provider_connections pc WHERE pc.provider_source_id=d."sourceId"
+              AND pc.status='READY' AND pc.last_success_at>now()-interval '24 hours'
+          ))
         """ + aclPredicate() + """
         ORDER BY score DESC
         LIMIT """ + " " + KEYWORD_LIMIT;
