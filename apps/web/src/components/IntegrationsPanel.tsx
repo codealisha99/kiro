@@ -34,7 +34,8 @@ export default function IntegrationsPanel() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("integration") === "xero" && params.get("oauth") === "success") setOauthMessage("Xero authorization succeeded. Choose the organization to sync.");
-    if (params.get("integration") === "xero" && params.get("oauth") === "error") setOauthMessage("Xero authorization did not complete. Review the connection and try again.");
+    if (params.get("integration") === "googleanalytics" && params.get("oauth") === "success") setOauthMessage("Google Analytics authorization succeeded. The connection is ready for its first sync.");
+    if (["xero", "googleanalytics"].includes(params.get("integration") ?? "") && params.get("oauth") === "error") setOauthMessage("Authorization did not complete. Review the connection and try again.");
   }, []);
   async function action(fn: () => Promise<void>) { setBusy(true); setError(""); setSelected(null); setRecords([]); setRuns([]);
     try { await fn(); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
@@ -56,6 +57,10 @@ export default function IntegrationsPanel() {
             const connection = await orgApi.createConnection({ ...b, provider, resource: "", accountId: "", token: null });
             const result = await orgApi.startXeroOAuth(connection.id); window.location.assign(result.authorizationUrl); return;
           }
+          if (provider === "googleanalytics") {
+            const connection = await orgApi.createConnection({ ...b, provider, token: null });
+            const result = await orgApi.startGoogleAnalyticsOAuth(connection.id); window.location.assign(result.authorizationUrl); return;
+          }
           await orgApi.createConnection({ ...b, provider }); form.reset();
         });
       }}>
@@ -64,22 +69,24 @@ export default function IntegrationsPanel() {
         <Field label="Connection name">{f => <Input {...f} name="name" required maxLength={200} disabled={busy} />}</Field>
         {provider !== "xero" && <Field label={capability?.resourceLabel ?? "Resource"}>{f => <Input {...f} key={provider} name="resource" required maxLength={200} disabled={busy} />}</Field>}
         {provider !== "xero" && capability?.accountLabel && <Field label={capability.accountLabel}>{f => <Input {...f} name="accountId" required maxLength={100} disabled={busy} />}</Field>}
-        {provider !== "xero" && <Field label="Credential (optional for now)" hint="Stored encrypted on the server. Never displayed again.">{f => <Input {...f} name="token" type="password" autoComplete="new-password" disabled={busy || !catalog.credentialStorageReady} />}</Field>}
+        {!(["xero", "googleanalytics"].includes(provider)) && <Field label="Credential (optional for now)" hint="Stored encrypted on the server. Never displayed again.">{f => <Input {...f} name="token" type="password" autoComplete="new-password" disabled={busy || !catalog.credentialStorageReady} />}</Field>}
         {provider === "xero" && <p>Xero opens its authorization page. You will choose which authorized organization to sync after returning to Kiro. Tokens stay encrypted on the server.</p>}
+        {provider === "googleanalytics" && <p>Google opens its authorization page for read-only Analytics access. The property ID identifies the report; OAuth tokens stay encrypted on the server.</p>}
         <p>{capability?.entities}</p><p>Required access: {capability?.permissions}</p><p>{capability?.sync}</p>
-        <Button type="submit" disabled={busy || (provider === "xero" && (!catalog.credentialStorageReady || !catalog.xeroOAuthConfigured))}>{provider === "xero" ? catalog.xeroOAuthConfigured ? "Authorize Xero" : "Xero authorization not configured" : "Save connection"}</Button>
+        <Button type="submit" disabled={busy || (provider === "xero" && (!catalog.credentialStorageReady || !catalog.xeroOAuthConfigured)) || (provider === "googleanalytics" && (!catalog.credentialStorageReady || !catalog.googleAnalyticsOAuthConfigured))}>{provider === "xero" ? catalog.xeroOAuthConfigured ? "Authorize Xero" : "Xero authorization not configured" : provider === "googleanalytics" ? catalog.googleAnalyticsOAuthConfigured ? "Authorize Google Analytics" : "Google Analytics authorization not configured" : "Save connection"}</Button>
       </form></Card>
       <div className="org-heading"><h2>Your connections</h2><Button variant="secondary" disabled={busy} onClick={() => void action(async () => {})}>Refresh connections</Button></div>
       {!connections.length && <p>No connections configured. No external synchronization has occurred.</p>}
       {connections.map(c => <Card key={String(c.id)}><h3>{String(c.name)}</h3><Badge tone={c.status === "READY" ? "success" : c.status === "DELETED" ? "neutral" : "warning"}>{String(c.status)}</Badge>
         <p>{String(c.provider)} · {c.resource ? String(c.resource) : c.status === "OAUTH_TENANT" ? "Choose an authorized organization" : "No organization selected"}</p><p>Last complete sync: {c.last_success_at ? new Date(String(c.last_success_at)).toLocaleString() : "Never"}.</p>
         {c.last_error && <Alert tone="warning">{String(c.last_error)}. Correct permissions or replace the credential to restart.</Alert>}
-        {c.status === "OAUTH_AUTHORIZING" && <p role="status">Xero authorization is waiting for consent. Complete the Xero page, then return here.</p>}
+        {c.status === "OAUTH_AUTHORIZING" && <p role="status">Authorization is waiting for consent. Complete the provider page, then return here.</p>}
         <p>Records appear only after a complete successful scan and are withheld after errors, disconnects, or 24 hours without success. Multi-page scans continue automatically; Refresh connections checks progress.</p>
         <div className="org-tabs"><Button disabled={busy || ["UNCONFIGURED", "DISCONNECTED", "FAILED", "REAUTH", "DELETED"].includes(String(c.status))}
           onClick={() => void action(async () => { await orgApi.sync(String(c.id)); })}>Synchronize next page</Button>
           <Button variant="secondary" disabled={busy} onClick={() => void action(() => inspect(c))}>Inspect records & runs</Button>
           {c.provider === "xero" && ["REAUTH", "DISCONNECTED"].includes(String(c.status)) && <Button variant="secondary" disabled={busy || !catalog.xeroOAuthConfigured || !catalog.credentialStorageReady} onClick={() => void action(async () => { const result = await orgApi.startXeroOAuth(String(c.id)); window.location.assign(result.authorizationUrl); })}>Reconnect Xero</Button>}
+          {c.provider === "googleanalytics" && ["REAUTH", "DISCONNECTED"].includes(String(c.status)) && <Button variant="secondary" disabled={busy || !catalog.googleAnalyticsOAuthConfigured || !catalog.credentialStorageReady} onClick={() => void action(async () => { const result = await orgApi.startGoogleAnalyticsOAuth(String(c.id)); window.location.assign(result.authorizationUrl); })}>Reconnect Google Analytics</Button>}
           <Button variant="secondary" disabled={busy || ["DISCONNECTED", "DELETED"].includes(String(c.status))} onClick={() => setDisconnecting(String(c.id))}>Disconnect</Button>
           <Button variant="danger" disabled={busy || c.status === "DELETED"} onClick={() => setDeleting(String(c.id))}>Delete connection data</Button></div>
         {disconnecting === c.id && <Alert tone="warning">Disconnect removes the stored credential and hides imported records. Historical rows remain in storage.
@@ -96,7 +103,7 @@ export default function IntegrationsPanel() {
               <Button type="submit" disabled={busy || !tenantChoice[String(c.id)]}>Confirm organization and sync invoices</Button>
             </form>}
         </Card>}
-        {c.status !== "DELETED" && <details><summary>Add or replace credential</summary><form className="org-form" onSubmit={e => {
+        {c.status !== "DELETED" && !["xero", "googleanalytics"].includes(String(c.provider)) && <details><summary>Add or replace credential</summary><form className="org-form" onSubmit={e => {
           e.preventDefault(); const form = e.currentTarget; const token = String(new FormData(form).get("token"));
           void action(async () => { await orgApi.credential(String(c.id), token); form.reset(); });
         }}><Field label={`New credential for ${String(c.name)}`}>{f => <Input {...f} name="token" type="password" autoComplete="new-password" required disabled={busy || !catalog.credentialStorageReady} />}</Field>

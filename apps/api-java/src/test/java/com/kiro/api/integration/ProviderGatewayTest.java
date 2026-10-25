@@ -21,6 +21,24 @@ class ProviderGatewayTest {
   assertEquals("Basic "+Base64.getEncoder().encodeToString("client:secret".getBytes(java.nio.charset.StandardCharsets.UTF_8)),request.headers().firstValue("Authorization").orElseThrow());
   assertTrue(request.bodyPublisher().isPresent());assertEquals("new-access",tokens.accessToken());assertEquals("new-refresh",tokens.refreshToken());assertEquals(1800,tokens.expiresIn());
  }
+ @Test void googleAnalyticsAuthorizationRequestsReadOnlyOfflineAccessAndPkce() {
+  var g=new ProviderGateway(new ObjectMapper(),r->new ProviderGateway.Reply(200,"{}","60"),"","","","google-client","google-secret","https://kiro.example/integrations/googleanalytics/callback");
+  var u=java.net.URI.create(g.googleAnalyticsAuthorizationUrl("state-value","a-long-private-verifier-value"));
+  assertEquals("accounts.google.com",u.getHost());var q=java.net.URLDecoder.decode(u.getRawQuery(),java.nio.charset.StandardCharsets.UTF_8);
+  assertTrue(q.contains("scope=https://www.googleapis.com/auth/analytics.readonly"));assertTrue(q.contains("access_type=offline"));
+  assertTrue(q.contains("include_granted_scopes=true"));assertTrue(q.contains("prompt=consent"));assertTrue(q.contains("code_challenge_method=S256"));
+  assertTrue(q.contains("state=state-value"));assertFalse(q.contains("code_verifier"));
+ }
+ @Test void googleAnalyticsExchangesAndRefreshesAtFixedEndpointWithoutLeakingCredentialsInUrl() {
+  var requests=new ArrayList<HttpRequest>();var replies=new ArrayDeque<>(List.of(
+    new ProviderGateway.Reply(200,"{\"access_token\":\"ga-access\",\"refresh_token\":\"ga-refresh\",\"expires_in\":3600,\"scope\":\"https://www.googleapis.com/auth/analytics.readonly\"}","60"),
+    new ProviderGateway.Reply(200,"{\"access_token\":\"ga-access-2\",\"expires_in\":3600}","60")));
+  var g=new ProviderGateway(new ObjectMapper(),r->{requests.add(r);return replies.removeFirst();},"","","","google-client","google-secret","https://kiro.example/callback");
+  var exchanged=g.exchangeGoogleAnalyticsCode("one-time-code","pkce-verifier");assertEquals("ga-refresh",exchanged.refreshToken());
+  var refreshed=g.refreshGoogleAnalyticsToken(exchanged.refreshToken());assertEquals("ga-access-2",refreshed.accessToken());assertEquals("ga-refresh",refreshed.refreshToken());
+  assertEquals("https://oauth2.googleapis.com/token",requests.getFirst().uri().toString());assertEquals("POST",requests.getFirst().method());
+  assertTrue(requests.stream().noneMatch(r->r.uri().toString().contains("google-secret")||r.uri().toString().contains("ga-refresh")));
+ }
  @Test void analyticsPreservesTypedMetricsAndFixedPaginationDates() {
   var requests=new ArrayList<HttpRequest>();
   var g=gateway("{\"rowCount\":2,\"rows\":[{\"dimensionValues\":[{\"value\":\"Launch\"}],\"metricValues\":[{\"value\":\"100\"},{\"value\":\"5\"},{\"value\":\"12.50\"}]}],\"metadata\":{\"currencyCode\":\"USD\"}}",requests);

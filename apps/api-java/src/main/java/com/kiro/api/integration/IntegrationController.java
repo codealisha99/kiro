@@ -31,12 +31,20 @@ public class IntegrationController {
   @DeleteMapping("/{id}") public Object disconnect(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.disconnect(u,id); }
   @DeleteMapping("/{id}/data") public void deleteData(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { service.deleteData(u,id); }
   @PostMapping("/{id}/xero/authorize") public Object authorizeXero(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.startXeroOAuth(u,id); }
+  @PostMapping("/{id}/googleanalytics/authorize") public Object authorizeGoogleAnalytics(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.startGoogleAnalyticsOAuth(u,id); }
   @GetMapping("/{id}/xero/tenants") public Object xeroTenants(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.xeroTenants(u,id); }
   public record XeroTenantInput(@jakarta.validation.constraints.NotBlank String tenantId) {}
   @PostMapping("/{id}/xero/tenant") public Object selectXeroTenant(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id,@jakarta.validation.Valid @RequestBody XeroTenantInput body) { return service.selectXeroTenant(u,id,body.tenantId()); }
   @GetMapping("/xero/callback") public ResponseEntity<Void> xeroCallback(@RequestParam(required=false) String state,@RequestParam(required=false) String code,@RequestParam(required=false) String error) {
     boolean success=false;try { service.completeXeroOAuth(state,error==null?code:null);success=true; } catch(org.springframework.web.server.ResponseStatusException ignored) { }
-    URI target=UriComponentsBuilder.fromUriString(webUrl).replacePath("/app").replaceQuery(null).queryParam("integration","xero").queryParam("oauth",success?"success":"error").build().toUri();
+    return oauthRedirect("xero",success);
+  }
+  @GetMapping("/googleanalytics/callback") public ResponseEntity<Void> googleAnalyticsCallback(@RequestParam(required=false) String state,@RequestParam(required=false) String code,@RequestParam(required=false) String error) {
+    boolean success=false;try { service.completeGoogleAnalyticsOAuth(state,error==null?code:null);success=true; } catch(org.springframework.web.server.ResponseStatusException ignored) { }
+    return oauthRedirect("googleanalytics",success);
+  }
+  private ResponseEntity<Void> oauthRedirect(String provider,boolean success) {
+    URI target=UriComponentsBuilder.fromUriString(webUrl).replacePath("/app").replaceQuery(null).queryParam("integration",provider).queryParam("oauth",success?"success":"error").build().toUri();
     return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION,target.toString()).build();
   }
   @PostMapping("/{id}/sync") public Object sync(@AuthenticationPrincipal AuthenticatedPrincipal u,@PathVariable String id) { return service.sync(u,id); }
