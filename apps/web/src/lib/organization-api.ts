@@ -27,6 +27,7 @@ export const orgApi = {
   credential: (id: string, token: string) => request(`/integrations/${encodeURIComponent(id)}/credential`, { method: "PUT", body: { token } }),
   sync: (id: string) => request(`/integrations/${encodeURIComponent(id)}/sync`, { method: "POST" }),
   disconnect: (id: string) => request(`/integrations/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  deleteConnectionData: (id: string) => request(`/integrations/${encodeURIComponent(id)}/data`, { method: "DELETE" }),
   records: (id: string, offset = 0) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/records?offset=${offset}`),
   runs: (id: string) => request<DataRow[]>(`/integrations/${encodeURIComponent(id)}/runs`),
   mapSource: (projectId: string, body: unknown) => request(`/work/projects/${encodeURIComponent(projectId)}/sources`, { method: "POST", body }),

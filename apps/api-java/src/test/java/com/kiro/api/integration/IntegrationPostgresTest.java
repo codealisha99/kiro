@@ -82,6 +82,20 @@ class IntegrationPostgresTest {
   assertNull(db.queryForMap("SELECT encrypted_token FROM provider_connections WHERE id=?",id).get("encrypted_token"));
   assertEquals("CANCELLED",db.queryForObject("SELECT status FROM provider_sync_runs",String.class));
  }
+ @Test void permanentDataDeletionIsOwnerScopedAndRemovesImportedFacts() {
+  String id=(String)service.create(owner,new IntegrationService.ConnectionInput("googleanalytics","Synthetic campaign","123","","test-token")).get("id");
+  reply(200,"{\"rowCount\":1,\"rows\":[{\"dimensionValues\":[{\"value\":\"Launch\"}],\"metricValues\":[{\"value\":\"100\"},{\"value\":\"5\"},{\"value\":\"12.50\"}]}],\"metadata\":{\"currencyCode\":\"USD\"}}");
+  service.sync(owner,id);assertEquals(3L,db.queryForObject("SELECT count(*) FROM provider_metric_observations",Long.class));
+  assertThrows(ResponseStatusException.class,()->service.deleteData(otherAdmin,id));
+  service.deleteData(owner,id);
+  assertEquals("DELETED",status(id));assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_records",Long.class));
+  assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_metric_observations",Long.class));
+  assertNull(db.queryForObject("SELECT encrypted_token FROM provider_connections WHERE id=?",String.class,id));
+  assertTrue(org.auditHistory(owner).toString().contains("CONNECTION_DATA_DELETED"));
+  assertThrows(ResponseStatusException.class,()->service.credential(owner,id,"replacement"));
+  assertThrows(ResponseStatusException.class,()->service.sync(owner,id));
+  service.poll();assertEquals("DELETED",status(id));
+ }
  @Test void partialScanWithholdsRecordsAndContinuesStoredCursor() {
   String id=connection("secret-test-token");var records=new ArrayList<String>();for(int i=0;i<100;i++)records.add("{\"id\":"+i+",\"title\":\"Task\"}");
   reply(200,"["+String.join(",",records)+"]");service.sync(owner,id);assertEquals("PENDING",status(id));
