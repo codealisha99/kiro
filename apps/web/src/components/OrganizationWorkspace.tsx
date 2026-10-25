@@ -54,6 +54,10 @@ export default function OrganizationWorkspace() {
   const [tab, setTab] = useState<"dashboard" | "organization" | "integrations">("dashboard");
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true);
   const [audit, setAudit] = useState<DataRow[] | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("integration") === "xero") setTab("integrations");
+  }, []);
   const reload = useCallback(async () => { const s = await orgApi.setup(); setSetup(s); return s; }, []);
   useEffect(() => { let active = true; setLoading(true); setError(""); setData(null);
     Promise.all([orgApi.setup(), orgApi.dashboard(view)]).then(([s, d]) => { if (active) { setSetup(s); setData(d); } })

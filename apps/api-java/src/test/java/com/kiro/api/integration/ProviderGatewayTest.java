@@ -6,6 +6,21 @@ import java.net.http.HttpRequest;
 import org.junit.jupiter.api.Test;
 
 class ProviderGatewayTest {
+ @Test void xeroAuthorizationUsesFixedHostOfflineScopeAndPkce() throws Exception {
+  var g=new ProviderGateway(new ObjectMapper(),r->new ProviderGateway.Reply(200,"{}","60"),"client-id","client-secret","https://kiro.example/integrations/xero/callback");
+  var u=java.net.URI.create(g.xeroAuthorizationUrl("random-state","a-very-long-verifier-value-that-is-private"));
+  assertEquals("login.xero.com",u.getHost());var q=java.net.URLDecoder.decode(u.getRawQuery(),java.nio.charset.StandardCharsets.UTF_8);
+  assertTrue(q.contains("scope=accounting.transactions.read offline_access"));assertTrue(q.contains("state=random-state"));
+  assertTrue(q.contains("code_challenge_method=S256"));assertFalse(q.contains("code_verifier"));
+ }
+ @Test void xeroRefreshUsesFixedEndpointBasicClientAuthAndAcceptsRotatedTokens() {
+  var requests=new ArrayList<HttpRequest>();
+  var g=new ProviderGateway(new ObjectMapper(),r->{requests.add(r);return new ProviderGateway.Reply(200,"{\"access_token\":\"new-access\",\"refresh_token\":\"new-refresh\",\"expires_in\":1800}","60");},"client","secret","https://kiro.example/callback");
+  var tokens=g.refreshXeroToken("old-refresh");var request=requests.getFirst();
+  assertEquals("https://identity.xero.com/connect/token",request.uri().toString());assertEquals("POST",request.method());
+  assertEquals("Basic "+Base64.getEncoder().encodeToString("client:secret".getBytes(java.nio.charset.StandardCharsets.UTF_8)),request.headers().firstValue("Authorization").orElseThrow());
+  assertTrue(request.bodyPublisher().isPresent());assertEquals("new-access",tokens.accessToken());assertEquals("new-refresh",tokens.refreshToken());assertEquals(1800,tokens.expiresIn());
+ }
  @Test void analyticsPreservesTypedMetricsAndFixedPaginationDates() {
   var requests=new ArrayList<HttpRequest>();
   var g=gateway("{\"rowCount\":2,\"rows\":[{\"dimensionValues\":[{\"value\":\"Launch\"}],\"metricValues\":[{\"value\":\"100\"},{\"value\":\"5\"},{\"value\":\"12.50\"}]}],\"metadata\":{\"currencyCode\":\"USD\"}}",requests);

@@ -140,6 +140,7 @@ export default function Workspace({
   useEffect(() => {
     setAuthed(!!getToken());
     setReady(true);
+    if (new URLSearchParams(window.location.search).get("integration") === "xero") setView("organization");
   }, []);
   useEffect(() => {
     const expire = () => {

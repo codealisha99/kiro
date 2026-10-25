@@ -7,7 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.math.BigDecimal;
 import java.util.*;
+import java.security.MessageDigest;
+import java.util.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /** Read-only official API adapters. Imported text is data, never executable instructions. */
@@ -28,8 +31,56 @@ public class ProviderGateway {
     public ProviderFailure(String code,boolean retryable,int delaySeconds) { super(code);this.code=code;this.retryable=retryable;this.delaySeconds=delaySeconds; }
   }
   private final ObjectMapper json; private final Transport transport;
-  @Autowired public ProviderGateway(ObjectMapper json) { this(json,new HttpTransport()); }
-  ProviderGateway(ObjectMapper json,Transport transport) { this.json=json;this.transport=transport; }
+  private final String xeroClientId,xeroClientSecret,xeroRedirectUri;
+  public record XeroTokens(String accessToken,String refreshToken,int expiresIn) {}
+  public record XeroTenant(String tenantId,String tenantName) {}
+  @Autowired public ProviderGateway(ObjectMapper json,@Value("${XERO_CLIENT_ID:}") String clientId,
+      @Value("${XERO_CLIENT_SECRET:}") String clientSecret,@Value("${XERO_REDIRECT_URI:}") String redirectUri) {
+    this(json,new HttpTransport(),clientId,clientSecret,redirectUri);
+  }
+  ProviderGateway(ObjectMapper json,Transport transport) { this(json,transport,"","",""); }
+  ProviderGateway(ObjectMapper json,Transport transport,String clientId,String clientSecret,String redirectUri) {
+    this.json=json;this.transport=transport;this.xeroClientId=clientId;this.xeroClientSecret=clientSecret;this.xeroRedirectUri=redirectUri;
+  }
+  public boolean xeroOAuthConfigured() {
+    if(xeroClientId.isBlank()||xeroClientSecret.isBlank()||xeroRedirectUri.isBlank())return false;
+    try {var u=URI.create(xeroRedirectUri);return "https".equals(u.getScheme())&&u.getHost()!=null || "http".equals(u.getScheme())&&Set.of("localhost","127.0.0.1").contains(u.getHost());}
+    catch(Exception e){return false;}
+  }
+  public String xeroAuthorizationUrl(String state,String verifier) {
+    if(!xeroOAuthConfigured())throw new ProviderFailure("XERO_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      String challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+      return "https://login.xero.com/identity/connect/authorize?response_type=code&client_id="+q(xeroClientId)+"&redirect_uri="+q(xeroRedirectUri)+"&scope="+q("accounting.transactions.read offline_access")+"&state="+q(state)+"&code_challenge="+q(challenge)+"&code_challenge_method=S256";
+    } catch(Exception e){throw new IllegalStateException("Could not prepare Xero authorization");}
+  }
+  public XeroTokens exchangeXeroCode(String code,String verifier) { return xeroTokenRequest(Map.of("grant_type","authorization_code","code",code,"redirect_uri",xeroRedirectUri,"code_verifier",verifier),false); }
+  public XeroTokens refreshXeroToken(String refreshToken) { return xeroTokenRequest(Map.of("grant_type","refresh_token","refresh_token",refreshToken),true); }
+  public List<XeroTenant> xeroTenants(String accessToken) {
+    var result=request("https://api.xero.com/connections","Bearer "+accessToken,null,Map.of());var tenants=new ArrayList<XeroTenant>();
+    for(var row:array(result))tenants.add(new XeroTenant(required(row,"tenantId"),Objects.requireNonNullElse(text(row,"tenantName"),"Xero organization")));
+    if(tenants.isEmpty())throw new ProviderFailure("XERO_NO_AUTHORIZED_TENANTS",false,0);
+    return List.copyOf(tenants);
+  }
+  private XeroTokens xeroTokenRequest(Map<String,String> fields,boolean refresh) {
+    if(!xeroOAuthConfigured())throw new ProviderFailure("XERO_OAUTH_NOT_CONFIGURED",false,0);
+    try {
+      String form=fields.entrySet().stream().map(e->q(e.getKey())+"="+q(e.getValue())).collect(java.util.stream.Collectors.joining("&"));
+      String basic=Base64.getEncoder().encodeToString((xeroClientId+":"+xeroClientSecret).getBytes(StandardCharsets.UTF_8));
+      var req=HttpRequest.newBuilder(URI.create("https://identity.xero.com/connect/token")).timeout(Duration.ofSeconds(20))
+          .header("Authorization","Basic "+basic).header("Accept","application/json").header("Content-Type","application/x-www-form-urlencoded")
+          .POST(HttpRequest.BodyPublishers.ofString(form)).build();
+      Reply reply=transport.send(req);
+      if(reply.status()<200||reply.status()>=300) {
+        String code=refresh?(reply.status()==400||reply.status()==401?"XERO_REFRESH_REAUTH":"XERO_REFRESH_OUTCOME_UNKNOWN"):"XERO_OAUTH_EXCHANGE_FAILED";
+        throw new ProviderFailure(code,false,0);
+      }
+      JsonNode jsonToken=json.readTree(reply.body());
+      return new XeroTokens(required(jsonToken,"access_token"),required(jsonToken,"refresh_token"),jsonToken.path("expires_in").asInt(0));
+    } catch(ProviderFailure e){throw e;}
+    catch(InterruptedException e){Thread.currentThread().interrupt();throw new ProviderFailure(refresh?"XERO_REFRESH_OUTCOME_UNKNOWN":"XERO_OAUTH_EXCHANGE_FAILED",false,0);}
+    catch(Exception e){throw new ProviderFailure(refresh?"XERO_REFRESH_OUTCOME_UNKNOWN":"XERO_OAUTH_EXCHANGE_FAILED",false,0);}
+  }
   private static class HttpTransport implements Transport {
     private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
     public Reply send(HttpRequest request) throws Exception {
