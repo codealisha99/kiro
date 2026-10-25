@@ -16,6 +16,9 @@ export default function ProjectSources({ projectId, canWrite }: { projectId: str
     {!loading && !rows.length && <p>No shared sources on this page.</p>}
     <ul>{rows.map(r => <li key={String(r.id)}><strong>{String(r.source_title)}</strong> — {String(r.freshness)}
       <p>{String(r.rationale)} · Snapshot {new Date(String(r.source_observed_at)).toLocaleString()}</p>
+      {r.source_amount != null && <p>Financial snapshot: {String(r.source_amount)} {r.source_currency ? String(r.source_currency) : "(currency not supplied)"}. Amounts remain in their original currencies and are not combined.</p>}
+      {r.source_department && <p>Employee snapshot: {String(r.source_department)} department · supervisor {String(r.source_supervisor_reference ?? "not supplied")}.</p>}
+      {r.source_metric && <p>Marketing snapshot: {String(r.source_metric)} {String(r.source_metric_value)} {String(r.source_metric_unit)} · {String(r.source_period_start)} through {String(r.source_period_end)} · campaign {String(r.source_campaign)}.</p>}
       {r.source_url && <a href={String(r.source_url)} target="_blank" rel="noreferrer">Open original source</a>}
       {canWrite && <Button variant="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(""); try { await orgApi.revokeSource(projectId, String(r.id)); setRevision(n => n + 1); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>Unlink source</Button>}
     </li>)}</ul>

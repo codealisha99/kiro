@@ -252,6 +252,55 @@ class WorkPostgresTest {
     assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.list(reader,p,0)));
   }
 
+  @Test void providerFactsRequireReviewAndRemainInSourceUnitsAfterSharing() {
+    String p=project("Finance and people mapping");
+    tx.execute(t->work.grant(owner,p,new GrantInput(admin.id(),"WRITE"),false));
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),false));
+    var sources=new WorkSourceService(db,work,new com.kiro.api.organization.OrganizationService(db,new ObjectMapper()));
+    String c=UUID.randomUUID().toString();
+    db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at) VALUES (?,'org','admin','hubspot','Synthetic','portal','READY',now())",c);
+    Map<String,String> records=new LinkedHashMap<>();
+    for(String kind:List.of("DEAL","INVOICE","EMPLOYEE","MARKETING_METRIC")) {
+      String id=UUID.randomUUID().toString(); records.put(kind,id);
+      db.update("INSERT INTO provider_records(id,tenant_id,connection_id,external_id,kind,title,generation) VALUES (?,'org',?,?,?,?,'generation')",
+          id,c,"external-"+kind,kind,"Shared "+kind);
+    }
+    db.update("INSERT INTO provider_financial_facts(tenant_id,record_id,amount,currency) VALUES ('org',?,?,?),( 'org',?,?,?)",
+        records.get("DEAL"),new BigDecimal("1200.00"),"USD",records.get("INVOICE"),new BigDecimal("950.00"),"GBP");
+    db.update("INSERT INTO provider_people_facts(tenant_id,record_id,department,supervisor_reference) VALUES ('org',?,?,?)",
+        records.get("EMPLOYEE"),"Engineering","manager-7");
+    db.update("INSERT INTO provider_metric_observations(tenant_id,record_id,metric,value,unit,period_start,period_end,campaign,currency) VALUES ('org',?,?,?,?,?,?,?,?)",
+        records.get("MARKETING_METRIC"),"conversions",new BigDecimal("17"),"count",LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),"launch","USD");
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(admin,p,
+        new WorkSourceService.MappingInput(records.get("INVOICE"),null,"Invoice for launch",false))));
+    assertEquals(0L,db.queryForObject("SELECT count(*) FROM work_source_mappings",Long.class));
+    for(var entry:records.entrySet()) tx.execute(t->sources.map(admin,p,
+        new WorkSourceService.MappingInput(entry.getValue(),null,"Reviewed project relationship",true)));
+
+    var visible=tx.execute(t->sources.list(reader,p,0));
+    assertEquals(4,visible.size());
+    var deal=visible.stream().filter(x->"DEAL".equals(x.get("source_kind"))).findFirst().orElseThrow();
+    var invoice=visible.stream().filter(x->"INVOICE".equals(x.get("source_kind"))).findFirst().orElseThrow();
+    assertEquals("1200.0000",deal.get("source_amount").toString());
+    assertEquals("USD",deal.get("source_currency"));
+    assertEquals("950.0000",invoice.get("source_amount").toString());
+    assertEquals("GBP",invoice.get("source_currency"));
+    var employee=visible.stream().filter(x->"EMPLOYEE".equals(x.get("source_kind"))).findFirst().orElseThrow();
+    assertEquals("Engineering",employee.get("source_department"));
+    assertEquals("manager-7",employee.get("source_supervisor_reference"));
+    var marketing=visible.stream().filter(x->"MARKETING_METRIC".equals(x.get("source_kind"))).findFirst().orElseThrow();
+    assertEquals("conversions",marketing.get("source_metric"));
+    assertEquals(new BigDecimal("17.000000"),marketing.get("source_metric_value"));
+    assertEquals("launch",marketing.get("source_campaign"));
+
+    db.update("UPDATE provider_financial_facts SET amount=1300 WHERE record_id=?",records.get("DEAL"));
+    var changed=tx.execute(t->sources.list(reader,p,0)).stream().filter(x->"DEAL".equals(x.get("source_kind"))).findFirst().orElseThrow();
+    assertEquals("CHANGED",changed.get("freshness"));
+    assertEquals("1200.0000",changed.get("source_amount").toString());
+    tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),true));
+    assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.list(reader,p,0)));
+  }
+
   PlanningService planning() {return new PlanningService(db,work,new ObjectMapper().findAndRegisterModules());}
   @Test void crossProjectCommitmentsStayScopedAndNeverDiscloseHiddenWork() {
     var plan=planning();
