@@ -5,7 +5,7 @@
 .goals-mode { display: inline-flex; gap: var(--space-1); flex-wrap: wrap; }
 .goals-mode .btn[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
 .goals-shortcuts { margin: 0; font-size: var(--text-xs); }
-kbd, .goals-kbd {
+.goals-kbd {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: inherit;

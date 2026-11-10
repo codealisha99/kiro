@@ -52,7 +52,6 @@ export function TopBar({
         className="shell-palette-trigger"
         onClick={onOpenPalette}
         aria-keyshortcuts="Meta+K Control+K"
-        aria-label={`Search and commands, ${shortcut}`}
       >
         <WorkspaceIcon name="search" width="16" height="16" />
         <span>Search or jump to…</span>
