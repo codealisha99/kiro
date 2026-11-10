@@ -280,3 +280,46 @@ Because the palette was derived from Kiro's hues, the validator measured it. Do 
 ### Verification (2026-11-10)
 
 `typecheck`, `lint`, `test` (36 tests, including the scale math, theme, shell routing, and palette ranking), and `build` pass. Visual checks: desktop and 390px mobile, light and dark, the open palette, the shortcut dialog, the workspace menu, the collapsed sidebar, and `/design-system` (shell and charts sections in both themes).
+
+## Product story and motion — 2026-11-10
+
+Direction unchanged: same palette, fonts and calm editorial tone (the user chose to evolve rather than replace it). The landing page now tells the whole product instead of document Q&A only.
+
+### Landing page (`app/page.tsx`, `app/landing-story.css`)
+
+Order: hero → problem → how it works → evidence → goals → trust → FAQ → closing. Each section has one job:
+
+- **Hero.** Editorial headline ("Ask your company what's happening.") with the **scope lens** below it (`components/landing/ScopeLens.tsx`): one illustrative company seen as the CEO, a manager and an employee. Switching role dims the people outside that view and collapses the goals they can't see. The roles are a native radio group, so arrow keys work, and a polite live region states the result ("Riley sees 1 of 7 people and 4 of 6 goals").
+- **Problem.** A before/after: the status scattered across a thread, a ticket, a pull request and a spreadsheet, beside one cited answer.
+- **How it works.** Connect → scope → answer, joined by a line that draws as the section scrolls in. It lists only providers the API can connect today: Slack, Linear, GitHub, Google Drive, Google Analytics, HubSpot and Xero.
+- **Evidence.** The existing interactive cited-answer demo (`LandingDemo`).
+- **Goals.** `GoalAnatomy`: one worked metric goal showing progress, the expected-by-today marker, the gap, the health it produces, and the distance to target.
+- **Trust.** Only claims the code enforces: permissions applied inside the query, restricted documents, the 24-hour freshness rule for connected tools, and "we don't know".
+
+Every example is labeled illustrative. The lens data (`lib/scope-lens.ts`) uses the product's real visibility rules and health thresholds; `tests/scope-lens.test.mjs` fails if the copy drifts from them. Never add customers, testimonials, statistics or integrations that don't exist.
+
+### Motion tokens (`styles/tokens.css`)
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--duration-fast` | 120ms | Hover and press feedback |
+| `--duration-normal` | 180ms | Control state changes, dialogs |
+| `--duration-slow` | 260ms | Scope and panel changes, view entrances |
+| `--duration-reveal` | 520ms | Content entering the page (landing hero) |
+| `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | Controls |
+| `--ease-out` | `cubic-bezier(0.16, 1, 0.3, 1)` | Entrances and reveals |
+| `--stagger` | 60ms | Delay between items entering together |
+
+Rules:
+- Motion explains a change (what entered, what left, what grew); it never delays an action.
+- Below-the-fold reveals use native scroll-driven CSS (`animation-timeline: view()`) inside `@supports`, so unsupported browsers simply show the content. Don't hide content with JavaScript before it animates.
+- Switching app views plays a 260ms entrance on the new view (`shell.css`, `shell-view-in`). It adds no wrapper element, so view layouts are untouched.
+- `globals.css` turns off every animation and transition under `prefers-reduced-motion`.
+
+### Lessons from this review
+
+- Don't style bare elements (`kbd`, `p`) from a page stylesheet. Two such rules leaked: `goals-page.css` faded every `<kbd>` in the app below AA contrast, and `.work-screen p` greyed out the chart kit's stat values. Scope to a class.
+- `GoalRow` renders its own `<li>`. Put it directly inside a `<ul>`; wrapping it in another `<li>` breaks hydration.
+- Hide visible text with the `sr-only` pattern, not `display: none`, when it is the control's accessible name (the mobile search button).
+
+Verified: typecheck, lint, 72 web tests, the production build, zero serious axe violations on the landing page and on every app route at 1440px and 390px in both themes, no horizontal overflow, and no React warnings in development on any route.
