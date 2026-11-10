@@ -7,6 +7,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 export { FileUpload } from "./file-upload";
+export { PageHeader, PageTabs, Panel, Section } from "./page";
 
 import { forwardRef, useEffect, useId, useRef } from "react";
 import type {

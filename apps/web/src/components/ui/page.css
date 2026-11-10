@@ -1,0 +1,91 @@
+/* Page primitives: PageHeader, PageTabs, Section, Panel. Density follows the compact scale in tokens.css. */
+.ui-page-header {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  min-width: 0;
+}
+.ui-page-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ui-page-title-block { display: grid; gap: 2px; min-width: 0; }
+.ui-page-eyebrow { margin: 0; color: var(--color-muted); font-size: var(--text-xs); }
+.ui-page-header h1 {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.ui-page-subtitle { margin: 0; color: var(--color-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.ui-page-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ui-page-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ui-page-tabs { min-width: 0; overflow-x: auto; }
+.ui-page-tablist { display: flex; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; }
+.ui-page-tablist::-webkit-scrollbar { display: none; }
+.ui-page-tab { flex: none; }
+/* Small screens: tabs scroll sideways; a fade on the trailing edge shows there is more. */
+@media (max-width: 640px) {
+  .ui-page-tablist { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); padding-right: var(--space-6); }
+}
+.ui-page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--density-row-compact);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-page-tab:hover { color: var(--color-text); }
+.ui-page-tab.is-selected { color: var(--color-text); border-bottom-color: var(--color-accent); }
+.ui-page-tab:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.ui-page-tab-count { color: var(--color-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.ui-section { display: grid; gap: var(--space-3); min-width: 0; }
+.ui-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ui-section-head h2 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.ui-section-head p { margin: 2px 0 0; color: var(--color-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.ui-section-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.ui-section-body { display: grid; gap: var(--space-3); min-width: 0; }
+.ui-panel {
+  min-width: 0;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.ui-panel.tone-raised { background: var(--color-raised); }
+.ui-panel.is-padded { padding: var(--space-4); }

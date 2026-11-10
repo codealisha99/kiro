@@ -63,6 +63,33 @@
   --content-width: 1120px;
   --reading-width: 680px;
   --page-gutter: clamp(20px, 4vw, 48px);
+  /* Chart kit: categorical slots (fixed order), sequential ramp, and chart chrome.
+     Validated with the data-viz six-checks; see DESIGN.md (2026-11-10). */
+  --chart-1: #007198;
+  --chart-2: #c0571e;
+  --chart-3: #00986c;
+  --chart-4: #9f6800;
+  --chart-5: #b84379;
+  --chart-6: #296818;
+  --chart-7: #6b4cae;
+  --chart-8: #b02a2d;
+  --chart-seq-1: #87b3bf;
+  --chart-seq-2: #529fb1;
+  --chart-seq-3: #0e899f;
+  --chart-seq-4: #00738d;
+  --chart-seq-5: #005b75;
+  --chart-surface: var(--color-panel);
+  --chart-grid: #dde3d8;
+  --chart-axis: #aeb9ad;
+  --chart-label: var(--color-muted);
+  --chart-target: var(--color-text);
+  /* Density: tighter than the reading canvas, for lists, tables, and shell chrome. */
+  --density-row: 36px;
+  --density-row-compact: 32px;
+  --density-gap: var(--space-2);
+  --shell-sidebar: 232px;
+  --shell-sidebar-collapsed: 56px;
+  --shell-topbar: 48px;
 }
 
 [data-theme="dark"] {
@@ -93,6 +120,22 @@
   --color-on-marker: #14201e;
   --color-danger-soft: #462b2e;
   --shadow-panel: 0 12px 32px rgb(0 0 0 / 18%);
+  --chart-1: #00a4c0;
+  --chart-2: #db703b;
+  --chart-3: #009d82;
+  --chart-4: #aa8722;
+  --chart-5: #d36a96;
+  --chart-6: #58994a;
+  --chart-7: #8d73d1;
+  --chart-8: #d8625c;
+  --chart-seq-1: #2b6d7c;
+  --chart-seq-2: #1b8fa5;
+  --chart-seq-3: #18b1cd;
+  --chart-seq-4: #4cd1ee;
+  --chart-seq-5: #9fecff;
+  --chart-grid: #2e443e;
+  --chart-axis: #4e655b;
+  --chart-label: var(--color-muted);
 }
 
 :root,
