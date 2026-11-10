@@ -31,6 +31,13 @@ public class OrganizationGraph {
     var goals=db.queryForList(cte+"SELECT g.id,g.name,g.project_id FROM work_goals g JOIN visible p ON p.id=g.project_id AND p.tenant_id=g.tenant_id ORDER BY g.id LIMIT 75",scope);
     var initiatives=db.queryForList(cte+"SELECT n.id,n.name,n.project_id,n.goal_id FROM work_initiatives n JOIN visible p ON p.id=n.project_id AND p.tenant_id=n.tenant_id ORDER BY n.id LIMIT 75",scope);
     var milestones=db.queryForList(cte+"SELECT m.id,m.name,m.project_id,m.initiative_id,m.due_date FROM work_milestones m JOIN visible p ON p.id=m.project_id AND p.tenant_id=m.tenant_id ORDER BY m.due_date,m.id LIMIT 75",scope);
+    var orgGoals=db.queryForList("SELECT g.id,g.title AS name,g.parent_id FROM org_goals g WHERE "+com.kiro.api.goal.GoalAccess.READ+" ORDER BY g.id LIMIT 75",
+        u.tenantId(),u.id());
+    var goalTracks=db.queryForList(cte+"SELECT gt.goal_id,gt.task_id FROM org_goal_tasks gt"+
+      " JOIN org_goals g ON g.tenant_id=gt.tenant_id AND g.id=gt.goal_id AND ("+com.kiro.api.goal.GoalAccess.READ+")"+
+      " JOIN work_tasks t ON t.tenant_id=gt.tenant_id AND t.id=gt.task_id"+
+      " JOIN visible p ON p.id=t.project_id AND p.tenant_id=t.tenant_id"+
+      " ORDER BY gt.goal_id,gt.task_id LIMIT 300",scope[0],scope[1],scope[2],u.tenantId(),u.id());
     var people=db.queryForList(cte+"""
       SELECT DISTINCT u.id,coalesce(u.name,u.id) AS name FROM visible p JOIN users u ON u."tenantId"=p.tenant_id
       WHERE p.owner_id=u.id
@@ -49,6 +56,7 @@ public class OrganizationGraph {
     for(var p:projects) node(nodes,"project",p.get("id"),(String)p.get("name"));
     for(var t:tasks) node(nodes,"task",t.get("id"),(String)t.get("name"),Map.of("status",String.valueOf(t.get("status"))));
     for(var g:goals) node(nodes,"goal",g.get("id"),(String)g.get("name"));
+    for(var g:orgGoals) node(nodes,"org_goal",g.get("id"),(String)g.get("name"));
     for(var i:initiatives) node(nodes,"initiative",i.get("id"),(String)i.get("name"));
     for(var m:milestones) node(nodes,"milestone",m.get("id"),(String)m.get("name"),Map.of("due_date",String.valueOf(m.get("due_date"))));
     for(var b:people) node(nodes,"person",b.get("id"),(String)b.get("name"));
@@ -67,6 +75,8 @@ public class OrganizationGraph {
       link(edges,nodes,"SUBTASK_OF",id,key("task",t.get("parent_id")));
     }
     for(var g:goals) link(edges,nodes,"IN_PROJECT",key("goal",g.get("id")),key("project",g.get("project_id")));
+    for(var g:orgGoals) link(edges,nodes,"ALIGNS_TO",key("org_goal",g.get("id")),key("org_goal",g.get("parent_id")));
+    for(var g:goalTracks) link(edges,nodes,"TRACKS",key("org_goal",g.get("goal_id")),key("task",g.get("task_id")));
     for(var i:initiatives) {
       link(edges,nodes,"IN_PROJECT",key("initiative",i.get("id")),key("project",i.get("project_id")));
       link(edges,nodes,"SUPPORTS",key("initiative",i.get("id")),key("goal",i.get("goal_id")));
@@ -98,12 +108,12 @@ public class OrganizationGraph {
     }
     var result=new LinkedHashMap<String,Object>();
     result.put("generatedAt",Instant.now());
-    result.put("method","Typed graph of authorized records only. Nodes: readable projects and their tasks, goals, initiatives, milestones plus every person referenced by them (owner, assignee, grant, availability, commitment); team and department structure appears only for manager-level dashboards. Edges: ownership, team, assignment, planning (subtask and milestone), dependencies, hierarchy, membership, and cross-project capacity draws. Structured relations are rendered as delivered; no relationships are inferred.");
+    result.put("method","Typed graph of authorized records only. Nodes: readable projects and their tasks, goals, organization goals (readable only), initiatives, milestones plus every person referenced by them (owner, assignee, grant, availability, commitment); team and department structure appears only for manager-level dashboards. Edges: ownership, team, assignment, planning (subtask and milestone), dependencies, goal alignment and goal-task tracking, hierarchy, membership, and cross-project capacity draws. Structured relations are rendered as delivered; no relationships are inferred.");
     result.put("nodes",List.copyOf(nodes.values()));
     result.put("edges",edges);
     var counts=new LinkedHashMap<String,Object>();
     counts.put("projects",projects.size());counts.put("tasks",tasks.size());counts.put("goals",goals.size());
-    counts.put("initiatives",initiatives.size());counts.put("milestones",milestones.size());counts.put("people",people.size());
+    counts.put("initiatives",initiatives.size());counts.put("orgGoals",orgGoals.size());counts.put("milestones",milestones.size());counts.put("people",people.size());
     counts.put("teams",teams.size());counts.put("departments",departments.size());counts.put("edges",edges.size());
     result.put("counts",counts);
     return result;

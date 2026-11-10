@@ -358,6 +358,7 @@ public class RagService {
           .append(" hours; ").append(metrics.get("missing_estimates"))
           .append(" unfinished tasks have no estimate.\n");
     }
+    appendRows(out, data, "goals", "Goals", RagService::goalLine);
     appendRows(out, data, "risks", "Open observations", row ->
         row.get("rule") + " — " + row.get("title") + " (" + row.get("project_name") + ")");
     appendRows(out, data, "tasks", "Open tasks", row ->
@@ -375,6 +376,19 @@ public class RagService {
     return out.append("\nThese figures reflect records visible to your current access. Hours are estimates, and this snapshot does not forecast delivery or utilization.").toString();
   }
 
+  /** One goal as a readable line: progress, expected, health, remaining and due date. */
+  static String goalLine(Map<String, Object> row) {
+    String progress = row.get("progress") instanceof Number n
+        ? Math.round(n.doubleValue() * 100) + "% complete" : "no progress data";
+    String expected = row.get("expected") instanceof Number e ? ", " + Math.round(e.doubleValue() * 100) + "% expected" : "";
+    String remaining = "";
+    if (row.get("remaining") != null) {
+      String unit = row.get("unit") != null ? " " + row.get("unit") : ("TASKS".equals(row.get("measure")) ? " open tasks" : "");
+      remaining = ", " + row.get("remaining") + unit + " remaining";
+    }
+    return row.get("title") + " (" + row.get("scopeName") + "): " + progress + expected + ", " + String.valueOf(row.get("health")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ')
+        + remaining + ", due " + row.get("dueDate");
+  }
 
   @SuppressWarnings("unchecked")
   private static void appendRows(StringBuilder out, Map<String, Object> data, String key,

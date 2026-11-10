@@ -1,13 +1,14 @@
 package com.kiro.api.organization;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.kiro.api.goal.GoalReader;
 import com.kiro.api.security.AuthenticatedPrincipal;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 class OrganizationQueryRouterTest {
   final OrganizationService org=mock(OrganizationService.class);
   final OrganizationDashboard dashboard=mock(OrganizationDashboard.class);
-  final OrganizationQueryRouter router=new OrganizationQueryRouter(org,dashboard);
+  final OrganizationQueryRouter router=new OrganizationQueryRouter(org,dashboard,mock(GoalReader.class));
   final AuthenticatedPrincipal user=new AuthenticatedPrincipal("u","u@test","t","employee");
   @Test void policyQuestionsDoNotUseOperationalData() {
     assertTrue(router.route(user,"What is the project management policy?").isEmpty());

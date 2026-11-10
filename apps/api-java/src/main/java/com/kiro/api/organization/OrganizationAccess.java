@@ -14,13 +14,22 @@ public final class OrganizationAccess {
             SELECT 1 FROM org_teams ot WHERE ot.tenant_id=p.tenant_id AND ot.id=p.team_id AND ot.department_id=b.department_id))))
       """.formatted(permission);
   }
+  // Unrestricted project whose owner or a task assignee sits in the viewer's transitive reporting subtree.
+  private static final String SUBTREE_PROJECT = """
+      (NOT p.restricted AND EXISTS (WITH RECURSIVE reports(id) AS (
+        SELECT r.employee_id FROM org_reporting_lines r WHERE r.tenant_id=p.tenant_id AND r.manager_id=viewer.user_id AND r.revoked_at IS NULL
+        UNION SELECT r.employee_id FROM org_reporting_lines r JOIN reports a ON r.manager_id=a.id
+          WHERE r.tenant_id=p.tenant_id AND r.revoked_at IS NULL)
+        SELECT 1 FROM reports WHERE id=p.owner_id OR id IN (SELECT t.assignee_id FROM work_tasks t
+          WHERE t.tenant_id=p.tenant_id AND t.project_id=p.id AND t.assignee_id IS NOT NULL)))
+      """;
   public static final String READ = """
       p.tenant_id=? AND (p.owner_id=? OR EXISTS (SELECT 1 FROM (SELECT ?::text AS user_id) viewer WHERE
         EXISTS (SELECT 1 FROM work_project_grants g WHERE g.tenant_id=p.tenant_id AND g.project_id=p.id
           AND g.user_id=viewer.user_id AND g.revoked_at IS NULL)
         OR (NOT p.restricted AND EXISTS (SELECT 1 FROM org_team_memberships m WHERE m.tenant_id=p.tenant_id
           AND m.team_id=p.team_id AND m.user_id=viewer.user_id AND m.revoked_at IS NULL)) OR
-      """+organizational("PROJECT_READ")+"))";
+      """+organizational("PROJECT_READ")+" OR "+SUBTREE_PROJECT+"))";
   public static final String WRITE = """
       p.tenant_id=? AND (p.owner_id=? OR EXISTS (SELECT 1 FROM (SELECT ?::text AS user_id) viewer WHERE
         EXISTS (SELECT 1 FROM work_project_grants g WHERE g.tenant_id=p.tenant_id AND g.project_id=p.id
