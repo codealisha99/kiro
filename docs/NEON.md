@@ -52,3 +52,10 @@ deployment, consider disabling scale-to-zero. This is from documentation, not me
 
 Sources: https://neon.com/docs/connect/connection-pooling ,
 https://neon.com/docs/connect/connect-from-any-app , https://neon.com/docs/introduction/auto-suspend
+
+## Production (2026-11-10)
+
+- Neon project `kiro` (`mute-bonus-64729222`), Postgres 18, region `aws-us-west-2`, near Railway's `sfo` services. pgvector 0.8.6 is enabled.
+- The Railway `api` service's `DATABASE_URL` uses the **direct** endpoint (no `-pooler`) with `sslmode=require`, because Flyway migrates on startup.
+- Data was moved from Railway Postgres 18 with `pg_dump --no-owner --no-acl` streamed into Neon from inside the Railway network. Row counts and the latest writes matched before the switch. The Railway Postgres service is kept, unused, as a rollback; point `DATABASE_URL` back at it to revert.
+- Railway only deploys commits whose GitHub checks pass (`checkSuites: true` in `.railway/railway.ts`). A red CI run is shown as a `SKIPPED` deployment.
