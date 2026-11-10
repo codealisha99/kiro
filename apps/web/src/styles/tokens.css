@@ -57,7 +57,13 @@
   --radius-full: 999px;
   --duration-fast: 120ms;
   --duration-normal: 180ms;
+  /* Motion: fast/normal for control feedback, slow for state changes (scope, panels),
+     reveal for content entering the page. Everything stops under prefers-reduced-motion. */
+  --duration-slow: 260ms;
+  --duration-reveal: 520ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --stagger: 60ms;
   --shadow-panel: 0 12px 32px rgb(23 43 41 / 7%);
   --shadow-overlay: 0 24px 60px rgb(8 14 22 / 25%);
   --content-width: 1120px;
