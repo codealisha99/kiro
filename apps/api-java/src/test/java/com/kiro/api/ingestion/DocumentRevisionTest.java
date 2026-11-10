@@ -35,6 +35,16 @@ class DocumentRevisionTest {
             .string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("PATCH")));
   }
 
+  @Test
+  void preflightFromAnUnlistedOriginIsRefused() throws Exception {
+    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/documents/doc")
+        .header("Origin", "https://evil.example")
+        .header("Access-Control-Request-Method", "PATCH"))
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+            .doesNotExist("Access-Control-Allow-Origin"));
+  }
+
   AuthenticatedPrincipal owner() {
     return new AuthenticatedPrincipal("owner", "owner@example.com", UUID.randomUUID().toString(), "employee");
   }

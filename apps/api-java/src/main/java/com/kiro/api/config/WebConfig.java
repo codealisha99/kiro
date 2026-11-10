@@ -4,7 +4,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import java.util.List;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
@@ -16,15 +19,21 @@ public class WebConfig implements WebMvcConfigurer {
     this.props = props;
   }
 
-  @Override
-  public void addCorsMappings(CorsRegistry registry) {
-    // Explicit allowlist only — never "*" in any profile.
-    registry.addMapping("/**")
-        .allowedOrigins(props.cors().allowedOrigins().toArray(String[]::new))
-        .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-        .allowedHeaders("*")
-        .allowCredentials(false)
-        .maxAge(3600);
+  /**
+   * The one CORS policy, applied by the security filter chain so browser preflights are answered
+   * before authentication. Explicit allowlist only — never "*" in any profile.
+   */
+  @Bean
+  public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration cors = new CorsConfiguration();
+    cors.setAllowedOrigins(List.copyOf(props.cors().allowedOrigins()));
+    cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    cors.setAllowedHeaders(List.of("*"));
+    cors.setAllowCredentials(false);
+    cors.setMaxAge(3600L);
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", cors);
+    return source;
   }
 
   @Bean
