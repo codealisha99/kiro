@@ -18,6 +18,7 @@ import {
   Mail01Icon,
   Shield01Icon,
   Settings01Icon,
+  Home01Icon,
 } from "@hugeicons/core-free-icons";
 
 const icons = {
@@ -38,6 +39,7 @@ const icons = {
   mail: Mail01Icon,
   shield: Shield01Icon,
   settings: Settings01Icon,
+  home: Home01Icon,
 };
 export type IconName = keyof typeof icons;
 

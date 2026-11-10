@@ -34,6 +34,7 @@ import type { DocumentEditorHandle } from "./DocumentEditor";
 import DocumentActions from "./DocumentActions";
 import EvidencePanel from "./EvidencePanel";
 import KnowledgeLibrary from "./KnowledgeLibrary";
+import HomeDashboard from "./HomeDashboard";
 import WorkDashboard from "./WorkDashboard";
 import OrganizationWorkspace from "./OrganizationWorkspace";
 import { KiroMark, WorkspaceIcon } from "./WorkspaceIcon";
@@ -88,7 +89,7 @@ export default function Workspace({
   const [success, setSuccess] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"ask" | "library" | "work" | "organization">("ask");
+  const [view, setView] = useState<"home" | "ask" | "library" | "work" | "organization">("home");
   const [railOpen, setRailOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingDocument, setEditingDocument] = useState(false);
@@ -490,6 +491,17 @@ export default function Workspace({
         </div>
         <p className="workspace-label">Your knowledge desk</p>
         <nav className="workspace-nav" aria-label="Main">
+          <button
+            className={`nav-item ${view === "home" ? "selected" : ""}`}
+            aria-current={view === "home" ? "page" : undefined}
+            onClick={() => {
+              setView("home");
+              setRailOpen(false);
+            }}
+          >
+            <WorkspaceIcon name="home" />
+            Home
+          </button>
           <Button
             variant="secondary"
             className="new-question"
@@ -593,7 +605,7 @@ export default function Workspace({
               Workspace <span aria-hidden="true">/</span>
             </span>
             <span>
-              {view === "organization" ? "Company dashboards" : view === "work" ? "Work & insights" : view === "library"
+              {view === "home" ? "Home" : view === "organization" ? "Company dashboards" : view === "work" ? "Work & insights" : view === "library"
                 ? "Knowledge library"
                 : currentTitle || "Ask Kiro"}
             </span>
@@ -638,7 +650,7 @@ export default function Workspace({
               </Button>
             )}
           </div>
-        ) : view === "organization" ? <OrganizationWorkspace key={user?.id} /> : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
+        ) : view === "home" ? <HomeDashboard key={user?.id} /> : view === "organization" ? <OrganizationWorkspace key={user?.id} /> : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
           <KnowledgeLibrary
             documents={documents}
             sources={sources}

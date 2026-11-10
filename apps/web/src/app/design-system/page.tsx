@@ -16,7 +16,42 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { GoalRow } from "@/components/GoalRow";
+import type { Goal } from "@/lib/home-api";
+import "../../components/home-dashboard.css";
 import "./design-system.css";
+
+// Static example goal for the shared goal progress row; values are illustrative.
+const goalPreview: Goal = {
+  id: "example-goal",
+  scope: "TEAM",
+  scopeName: "Growth",
+  title: "Win 120 new trial signups this quarter",
+  description: null,
+  ownerId: null,
+  ownerName: "Sam Rivera",
+  departmentId: null,
+  teamId: "example-team",
+  parentId: "example-parent",
+  measure: "METRIC",
+  unit: "signups",
+  startValue: 0,
+  targetValue: 120,
+  currentValue: 58,
+  startDate: "2026-10-01",
+  dueDate: "2026-12-31",
+  status: "ACTIVE",
+  progress: 0.48,
+  expected: 0.6,
+  health: "AT_RISK",
+  remaining: 62,
+  taskCount: 0,
+  doneTaskCount: 0,
+  childCount: 0,
+  canEdit: false,
+  mine: true,
+  version: 1,
+};
 
 const sections = ["Foundations", "Typography", "Components", "In context"];
 const colors = [
@@ -401,6 +436,19 @@ export default function DesignSystemPage() {
                   Upload failed. Try uploading the file again.
                 </Alert>
               </div>
+            </Card>
+            <Card>
+              <h3>Goal progress</h3>
+              <p className="muted">Progress against the expected marker, with health and distance stated in text.</p>
+              <ul className="home-goal-list">
+                <li>
+                  <GoalRow
+                    goal={goalPreview}
+                    parentTitle="Grow qualified pipeline"
+                    onOpen={() => undefined}
+                  />
+                </li>
+              </ul>
             </Card>
           </div>
         </section>
