@@ -2,11 +2,10 @@
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Field, Input } from "@/components/ui";
 import type { WorkProject } from "@/lib/work-api";
-import type { ProjectSummary } from "@/lib/work-metrics";
+import { projectSummary } from "@/lib/work-metrics";
 
 type Props = {
   projects: WorkProject[];
-  summaries: Record<string, ProjectSummary>;
   teamNames: Record<string, string>;
   selectedId: string | null;
   unread: number;
@@ -20,7 +19,7 @@ type Props = {
 };
 
 // Left pane: workspace overview, search, the project list with progress, and the create form.
-export function ProjectList({ projects, summaries, teamNames, selectedId, unread, offset, loading, busy, onSelect, onCreate, onPage, onRefresh }: Props) {
+export function ProjectList({ projects, teamNames, selectedId, unread, offset, loading, busy, onSelect, onCreate, onPage, onRefresh }: Props) {
   const [query, setQuery] = useState("");
   const [name, setName] = useState("");
   const needle = query.trim().toLowerCase();
@@ -51,7 +50,7 @@ export function ProjectList({ projects, summaries, teamNames, selectedId, unread
       <div data-nav-scope="projects">
         <ul className="work-project-list">
           {visible.map((p) => {
-            const summary = summaries[p.id];
+            const summary = projectSummary(p);
             const selected = selectedId === p.id;
             return (
               <li key={p.id}>
@@ -61,14 +60,12 @@ export function ProjectList({ projects, summaries, teamNames, selectedId, unread
                     {p.team_id ? (teamNames[p.team_id] ?? "Team") : "No team"}
                     {p.restricted !== false && <Badge tone="neutral">Restricted</Badge>}
                   </span>
-                  {summary ? (
-                    <span className="work-project-progress">
-                      <span className="work-meter" aria-hidden="true"><span style={{ width: `${Math.round((summary.stats.progress ?? 0) * 100)}%` }} /></span>
-                      <span>{summary.stats.done} of {summary.stats.total} done</span>
-                      {summary.stats.blocked > 0 && <span className="work-danger">{summary.stats.blocked} blocked</span>}
-                      {summary.updatedAt && <span className="work-muted">Updated {new Date(summary.updatedAt).toLocaleDateString()}</span>}
-                    </span>
-                  ) : <span className="work-muted">Progress unavailable</span>}
+                  <span className="work-project-progress">
+                    <span className="work-meter" aria-hidden="true"><span style={{ width: `${Math.round((summary.progress ?? 0) * 100)}%` }} /></span>
+                    <span>{summary.done} of {summary.total} done</span>
+                    {summary.blocked > 0 && <span className="work-danger">{summary.blocked} blocked</span>}
+                    {summary.updatedAt && <span className="work-muted">Updated {new Date(summary.updatedAt).toLocaleDateString()}</span>}
+                  </span>
                 </button>
               </li>
             );

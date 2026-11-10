@@ -67,6 +67,18 @@ class WorkPostgresTest {
     assertThrows(ResponseStatusException.class,()->tx.execute(t->work.history(reader,p,0)));
   }
 
+  @Test void projectListCountsEveryTaskBeyondTheDetailPage() {
+    String p=project("Large");
+    for(int i=0;i<103;i++) task(p,"Task "+i,i<101?"DONE":"BLOCKED",null,null);
+    var row=work.projects(owner,0).getFirst();
+    assertEquals(103L,row.get("task_total")); assertEquals(101L,row.get("task_done")); assertEquals(2L,row.get("task_blocked"));
+    assertNotNull(row.get("tasks_updated_at"));
+    assertEquals(100,((List<?>)tx.execute(t->work.detail(owner,p,0)).get("tasks")).size()); // the page the old list counted from
+    project("Empty");
+    var empty=work.projects(owner,0).stream().filter(r->"Empty".equals(r.get("name"))).findFirst().orElseThrow();
+    assertEquals(0L,empty.get("task_total")); assertNull(empty.get("tasks_updated_at"));
+  }
+
   @Test void deterministicMetricsAndInsightLifecyclePreserveEvidence() {
     String p=project("Delivery");
     var task=task(p,"Finish migration","BLOCKED",LocalDate.now().minusDays(1),BigDecimal.TEN);

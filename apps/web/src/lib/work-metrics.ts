@@ -136,11 +136,17 @@ export function parsePayload(raw: string): Record<string, unknown> | null {
   }
 }
 
-// Summary for the project list: counts from the loaded tasks plus the latest recorded change.
-export function projectSummary(project: Pick<WorkProject, "updated_at">, tasks: WorkTask[], today: string) {
-  const latestTask = tasks.reduce((latest, task) => Math.max(latest, Date.parse(task.updated_at) || 0), 0);
-  const updated = Math.max(latestTask, Date.parse(project.updated_at) || 0);
-  return { stats: summarizeTasks(tasks, today), updatedAt: updated ? new Date(updated).toISOString() : null };
+// Summary for the project list, from the server's counts over all of the project's tasks.
+type ProjectCounts = Pick<WorkProject, "updated_at" | "task_total" | "task_done" | "task_blocked" | "tasks_updated_at">;
+export function projectSummary(project: ProjectCounts) {
+  const total = Number(project.task_total ?? 0);
+  const done = Number(project.task_done ?? 0);
+  const updated = Math.max(Date.parse(project.tasks_updated_at ?? "") || 0, Date.parse(project.updated_at) || 0);
+  return {
+    total,
+    done,
+    blocked: Number(project.task_blocked ?? 0),
+    progress: total === 0 ? null : done / total,
+    updatedAt: updated ? new Date(updated).toISOString() : null,
+  };
 }
-
-export type ProjectSummary = ReturnType<typeof projectSummary>;

@@ -110,9 +110,11 @@ test("history payloads parse safely", () => {
   assert.equal(m.parsePayload("[1]"), null);
 });
 
-test("project summary reports the latest of the project and task updates", () => {
-  const tasks = [task({ updated_at: "2026-11-10T09:00:00Z" }), task({ updated_at: "2026-11-11T08:00:00Z" })];
-  const summary = m.projectSummary({ updated_at: "2026-11-01T00:00:00Z" }, tasks, "2026-11-11");
+test("project summary uses the server's counts and the latest update", () => {
+  const summary = m.projectSummary({ updated_at: "2026-11-01T00:00:00Z", task_total: 150, task_done: 120, task_blocked: 3, tasks_updated_at: "2026-11-11T08:00:00Z" });
   assert.equal(summary.updatedAt, "2026-11-11T08:00:00.000Z");
-  assert.equal(summary.stats.total, 2);
+  assert.deepEqual([summary.total, summary.done, summary.blocked, summary.progress], [150, 120, 3, 0.8]);
+  const empty = m.projectSummary({ updated_at: "2026-11-01T00:00:00Z", task_total: 0, task_done: 0, task_blocked: 0, tasks_updated_at: null });
+  assert.equal(empty.progress, null);
+  assert.equal(empty.updatedAt, "2026-11-01T00:00:00.000Z");
 });

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Alert, Badge, Button, Dialog, PageHeader, PageTabs, Section } from "@/components/ui";
 import { formatPercent } from "@/components/charts";
-import { type DataRow, orgApi } from "@/lib/organization-api";
+import type { DataRow } from "@/lib/organization-api";
 import { workApi, type WorkDetail, type WorkInsight, type WorkProject, type WorkScenario } from "@/lib/work-api";
 import { parsePayload, summarizeTasks, todayIso } from "@/lib/work-metrics";
 import ProjectActions from "../ProjectActions";
@@ -24,14 +24,15 @@ type Panel = { mode: "closed" | "create" | "edit"; taskId: string | null };
 const PAGE = 100;
 
 // One project: header, tabs, and the task panel. Owns this project's data; the parent keys it by project.
-export function ProjectView({ projectId, projects, insights, now, initialTab, initialScenario, onDetail, onInspect }: {
+export function ProjectView({ projectId, projects, teams, insights, now, initialTab, initialScenario, onChanged, onInspect }: {
   projectId: string;
   projects: WorkProject[];
+  teams: DataRow[];
   insights: WorkInsight[];
   now: number;
   initialTab: ProjectTab;
   initialScenario: WorkScenario | null;
-  onDetail: (detail: WorkDetail) => void;
+  onChanged: () => void;
   onInspect: (insight: WorkInsight) => void;
 }) {
   const [detail, setDetail] = useState<WorkDetail | null>(null);
@@ -40,8 +41,6 @@ export function ProjectView({ projectId, projects, insights, now, initialTab, in
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [teams, setTeams] = useState<DataRow[]>([]);
-  const [teamsError, setTeamsError] = useState("");
   const [tab, setTab] = useState<ProjectTab>(initialTab);
   const [panel, setPanel] = useState<Panel>({ mode: "closed", taskId: null });
   const [pendingScenario, setPendingScenario] = useState(initialScenario);
@@ -50,7 +49,7 @@ export function ProjectView({ projectId, projects, insights, now, initialTab, in
 
   // Only the newest load may write state, so a slow earlier page can't overwrite a later one.
   const generation = useRef(0);
-  const reload = useCallback(async (nextOffset: number) => {
+  const reload = useCallback(async (nextOffset: number, changed = true) => {
     const run = ++generation.current;
     const planning = workApi.planning(projectId).then(
       (snapshot) => ({ snapshot, error: "" }),
@@ -62,19 +61,16 @@ export function ProjectView({ projectId, projects, insights, now, initialTab, in
     setOffset(nextOffset);
     setPlanned(plan.snapshot ? Object.fromEntries(plan.snapshot.task_planning.map((p) => [p.task_id, p])) : {});
     setPlannedError(plan.error);
-    onDetail(next);
-  }, [projectId, onDetail]);
+    if (changed) onChanged();
+  }, [projectId, onChanged]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadError("");
-    reload(0)
+    reload(0, false)
       .catch((e: unknown) => { if (active) setLoadError(errorMessage(e)); })
       .finally(() => { if (active) setLoading(false); });
-    orgApi.teams()
-      .then((rows) => { if (active) { setTeams(rows); setTeamsError(""); } })
-      .catch((e: unknown) => { if (active) setTeamsError(errorMessage(e)); });
     return () => { active = false; };
   }, [reload]);
 
@@ -187,7 +183,7 @@ export function ProjectView({ projectId, projects, insights, now, initialTab, in
         </Section>
       )}
       {tab === "access" && (
-        <ProjectAccess detail={detail} teams={teams} teamsError={teamsError} reload={() => reload(offset)} />
+        <ProjectAccess detail={detail} teams={teams} reload={() => reload(offset)} />
       )}
       <Dialog open={!!history} onClose={() => setHistory(null)} title="Project change history">
         <p>Most recent 100 authorized events. Earlier task versions remain preserved.</p>

@@ -30,7 +30,13 @@ public class WorkService {
 
   @Transactional(readOnly=true)
   public List<Map<String,Object>> projects(AuthenticatedPrincipal u, int offset) {
-    return db.queryForList("SELECT p.* FROM work_projects p WHERE "+VISIBLE+" ORDER BY p.created_at DESC,p.id LIMIT 100 OFFSET ?",
+    // Task counts cover every task in the project, so the list never needs each project's (paged) detail.
+    return db.queryForList("""
+        SELECT p.*, c.task_total, c.task_done, c.task_blocked, c.tasks_updated_at FROM work_projects p
+        CROSS JOIN LATERAL (SELECT count(*) AS task_total, count(*) FILTER (WHERE t.status='DONE') AS task_done,
+          count(*) FILTER (WHERE t.status='BLOCKED') AS task_blocked, max(t.updated_at) AS tasks_updated_at
+          FROM work_tasks t WHERE t.tenant_id=p.tenant_id AND t.project_id=p.id) c
+        WHERE """+" "+VISIBLE+" ORDER BY p.created_at DESC,p.id LIMIT 100 OFFSET ?",
         u.tenantId(),u.id(),u.id(),offset);
   }
 

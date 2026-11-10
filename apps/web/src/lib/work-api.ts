@@ -4,6 +4,8 @@ export interface WorkProject {
   id: string; name: string; owner_id: string; updated_at: string;
   team_id?: string | null; restricted?: boolean;
   can_write?: boolean; can_manage_access?: boolean;
+  // Only on list rows: counts over every task in the project.
+  task_total?: number; task_done?: number; task_blocked?: number; tasks_updated_at?: string | null;
 }
 export interface WorkTask {
   id: string; project_id: string; title: string;

@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Dialog, Field, Input, PageHeader } from "@/components/ui";
 import { orgApi, type DataRow } from "@/lib/organization-api";
-import { workApi, type WorkDetail, type WorkInsight, type WorkNotification, type WorkOverview, type WorkProject, type WorkScenario } from "@/lib/work-api";
-import { projectSummary, todayIso, type ProjectSummary } from "@/lib/work-metrics";
+import { workApi, type WorkInsight, type WorkNotification, type WorkOverview, type WorkProject, type WorkScenario } from "@/lib/work-api";
 import { ProjectList } from "./work/ProjectList";
 import { ProjectView, type ProjectTab } from "./work/ProjectView";
 import { WorkspaceOverview } from "./work/WorkspaceOverview";
@@ -20,7 +19,6 @@ export default function WorkDashboard() {
   const [now, setNow] = useState(() => Date.now());
   const [overview, setOverview] = useState<WorkOverview | null>(null);
   const [projects, setProjects] = useState<WorkProject[]>([]);
-  const [summaries, setSummaries] = useState<Record<string, ProjectSummary>>({});
   const [teams, setTeams] = useState<DataRow[]>([]);
   const [insights, setInsights] = useState<WorkInsight[]>([]);
   const [notifications, setNotifications] = useState<WorkNotification[]>([]);
@@ -35,15 +33,19 @@ export default function WorkDashboard() {
   const page = useAction();
   useWorkShortcuts({ moveRows: true });
 
-  // Stable for the whole visit: ProjectView's load effect depends on it, so a dashboard reload
-  // must not reset the open project's task page. The current time is read through a ref.
-  const nowRef = useRef(now);
-  nowRef.current = now;
-  const handleDetail = useCallback((detail: WorkDetail) => {
-    setSummaries((current) => ({ ...current, [detail.project.id]: projectSummary(detail.project, detail.tasks, todayIso(nowRef.current)) }));
+  // After the open project changes, refresh the list's counts (one request). Stable for the whole
+  // visit: ProjectView's load effect depends on it, so it must not reset the open project's task page.
+  // The current page offset is read through a ref, and a reply for an older page is dropped.
+  const offsetRef = useRef(projectOffset);
+  offsetRef.current = projectOffset;
+  const handleChanged = useCallback(() => {
+    const requested = offsetRef.current;
+    workApi.projects(requested).then(
+      (rows) => { if (offsetRef.current === requested) setProjects(rows); },
+      () => { /* Counts stay as last loaded; the next page load refreshes them. */ },
+    );
   }, []);
 
-  // Project progress comes from each project's detail, because the project list has no counts.
   const loadPage = useCallback(async () => {
     const stamp = Date.now();
     const [o, p, i, n, t] = await Promise.all([
@@ -53,18 +55,12 @@ export default function WorkDashboard() {
       workApi.notifications(),
       orgApi.teams(),
     ]);
-    const details = await Promise.allSettled(p.map((project) => workApi.detail(project.id)));
-    const next: Record<string, ProjectSummary> = {};
-    details.forEach((result, index) => {
-      if (result.status === "fulfilled") next[p[index].id] = projectSummary(p[index], result.value.tasks, todayIso(stamp));
-    });
     setNow(stamp);
     setOverview(o);
     setProjects(p);
     setInsights(i);
     setNotifications(n);
     setTeams(t);
-    setSummaries(next);
   }, [projectOffset, insightOffset]);
 
   const runPage = page.run;
@@ -156,7 +152,6 @@ export default function WorkDashboard() {
           <aside className="work-list-pane" aria-label="Projects">
             <ProjectList
               projects={projects}
-              summaries={summaries}
               teamNames={teamNames}
               selectedId={selectedId}
               unread={unread}
@@ -178,11 +173,12 @@ export default function WorkDashboard() {
                 key={`${selectedId}:${viewKey}`}
                 projectId={selectedId}
                 projects={projects}
+                teams={teams}
                 insights={insights}
                 now={now}
                 initialTab={focusApplies && focus ? focus.tab : "overview"}
                 initialScenario={focusApplies && focus ? focus.scenario : null}
-                onDetail={handleDetail}
+                onChanged={handleChanged}
                 onInspect={(i) => void inspectInsight(i)}
               />
             ) : (

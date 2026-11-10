@@ -5,10 +5,9 @@ import { orgApi, type DataRow } from "@/lib/organization-api";
 import { workApi, type WorkDetail } from "@/lib/work-api";
 import { useAction } from "./use-action";
 
-export function ProjectAccess({ detail, teams, teamsError, reload }: {
+export function ProjectAccess({ detail, teams, reload }: {
   detail: WorkDetail;
   teams: DataRow[];
-  teamsError: string;
   reload: () => Promise<void>;
 }) {
   const project = detail.project;
@@ -31,7 +30,6 @@ export function ProjectAccess({ detail, teams, teamsError, reload }: {
   return (
     <>
       <Section title="Audience and team" description="Restricted projects use only ownership and explicit project grants. Sharing with organizational scope lets team members read and scoped roles read or write according to their configured permissions.">
-        {teamsError && <Alert tone="warning">Teams could not be loaded: {teamsError}</Alert>}
         {error && <Alert tone="danger">{error}</Alert>}
         <AudienceForm key={`${project.team_id ?? ""}-${restrictedDefault}`} projectId={project.id} teams={teams} initialTeam={project.team_id ?? ""} initialRestricted={restrictedDefault} busy={busy} run={run} reload={reload} />
       </Section>
