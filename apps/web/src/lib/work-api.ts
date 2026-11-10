@@ -10,7 +10,10 @@ export interface WorkTask {
   status: "TODO" | "IN_PROGRESS" | "BLOCKED" | "DONE";
   assignee_id: string | null; remaining_hours: number | null;
   due_date: string | null; version: number;
+  created_at: string; updated_at: string; completed_at: string | null;
 }
+export interface WorkPlanningTask { task_id: string; priority: "LOW" | "NORMAL" | "HIGH" | "CRITICAL"; milestone_id: string | null; parent_task_id: string | null; required_skill: string | null; version: number }
+export interface WorkPlanningSnapshot { task_planning: WorkPlanningTask[]; milestones: { id: string; name: string; due_date: string | null }[]; method: string }
 export interface WorkInsight {
   id: string; project_id: string; task_id: string; title: string;
   rule: "OVERDUE" | "BLOCKED" | "UNASSIGNED"; detected_at: string;
@@ -33,7 +36,7 @@ export interface WorkDetail {
   project: WorkProject; tasks: WorkTask[]; members: { id: string; name: string | null }[]; viewer_id: string;
 }
 export interface WorkScenario {
-  id: string; name: string; assessment: string; remaining_assumed_hours: number | null;
+  id: string; project_id: string; name: string; assessment: string; remaining_assumed_hours: number | null;
   period_start: string; period_end: string;
   method: string; limitations: string; known_remaining_hours: number; proposed_hours: number;
   available_hours: number; missing_estimates: number; undated_tasks: number;
@@ -47,6 +50,7 @@ export const workApi = {
   projects: (offset = 0) => request<WorkProject[]>(`/work/projects?offset=${offset}`),
   createProject: (name: string) => request<WorkProject>("/work/projects", { method: "POST", body: { name } }),
   detail: (id: string, offset = 0) => request<WorkDetail>(`${path(id)}?offset=${offset}`),
+  planning: (id: string) => request<WorkPlanningSnapshot>(`${path(id)}/planning`),
   saveTask: (project: string, body: {
     title: string; status: WorkTask["status"]; assigneeId: string | null;
     remainingHours: number | null; dueDate: string | null; expectedVersion?: number;
@@ -61,7 +65,7 @@ export const workApi = {
   impact: (id: string) => request<WorkTask[]>(`/work/tasks/${encodeURIComponent(id)}/impact`),
   dependency: (id: string, dependsOnId: string, rationale: string) =>
     request(`/work/tasks/${encodeURIComponent(id)}/dependencies`, { method: "POST", body: { dependsOnId, rationale } }),
-  history: (id: string) => request<{ id: string; kind: string; occurred_at: string; payload: string }[]>(`${path(id)}/history`),
+  history: (id: string) => request<{ id: string; kind: string; task_id: string | null; occurred_at: string; payload: string }[]>(`${path(id)}/history`),
   scenario: (id: string, body: { name: string; periodStart: string; periodEnd: string; availableHours: number; proposedHours: number; rationale: string }) =>
     request<WorkScenario>(`${path(id)}/scenarios`, { method: "POST", body }),
   scenarios: (id: string) => request<WorkScenario[]>(`${path(id)}/scenarios`),

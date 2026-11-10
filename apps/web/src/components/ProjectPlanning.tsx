@@ -10,7 +10,7 @@ type Planning = { goals: DataRow[]; initiatives: DataRow[]; milestones: DataRow[
 type Capacity = { people: DataRow[]; milestones: DataRow[]; method: string; calculatedAt: string };
 type Editor = "goals" | "initiatives" | "milestones" | "tasks" | "availability" | "commitments" | "skills" | "time";
 const editorLabels: Record<Editor, string> = { goals: "Goal observation", initiatives: "Initiative", milestones: "Milestone", tasks: "Task plan", availability: "Project availability", commitments: "Cross-project commitment", skills: "Skill evidence", time: "Actual effort" };
-export default function ProjectPlanning({ detail, projects = [] }: { detail: WorkDetail; projects?: WorkProject[] }) {
+export default function ProjectPlanning({ detail, projects = [], onChanged }: { detail: WorkDetail; projects?: WorkProject[]; onChanged?: () => void }) {
   const [data, setData] = useState<Planning | null>(null), [capacity, setCapacity] = useState<Capacity | null>(null);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0), [editor, setEditor] = useState<Editor>("goals"), [editGoal, setEditGoal] = useState<DataRow | null>(null);
@@ -19,7 +19,7 @@ export default function ProjectPlanning({ detail, projects = [] }: { detail: Wor
     request<Planning>(base).then(d => { if (active) setData(d); }).catch(e => { if (active) setError((e as Error).message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [base, revision]);
-  async function action(fn: () => Promise<void>) { setError(""); setBusy(true); try { await fn(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
+  async function action(fn: () => Promise<void>) { setError(""); setBusy(true); try { await fn(); onChanged?.(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
   const text = (name: string, label: string, type = "text", value: string | number = "", required = true) => <Field label={label}>{f => <Input {...f} name={name} type={type} defaultValue={value} required={required} disabled={busy} maxLength={type === "text" ? 1000 : undefined} step={type === "number" ? "0.01" : undefined} min={type === "number" ? "0" : undefined} />}</Field>;
   const choose = (name: string, label: string, rows: { id: string; label: string }[], required = false) => <Field label={label}>{f => <Select {...f} name={name} required={required} disabled={busy}><option value="">{required ? "Select one" : "None"}</option>{rows.map(r => <option value={r.id} key={r.id}>{r.label}</option>)}</Select>}</Field>;
   const options = (rows: DataRow[]) => rows.map(r => ({ id: String(r.id), label: String(r.name) }));
