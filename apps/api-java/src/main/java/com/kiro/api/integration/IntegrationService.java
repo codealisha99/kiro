@@ -65,10 +65,10 @@ public class IntegrationService {
     String id=UUID.randomUUID().toString(),sourceId=UUID.randomUUID().toString();boolean configured=input.token()!=null&&!input.token().isBlank();
     String encrypted=configured?vault.encrypt(input.token(),u.tenantId()+":"+id):null;
     tx.executeWithoutResult(t->{
-      db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,account_id,encrypted_token,status,provider_source_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        id,u.tenantId(),u.id(),input.provider(),input.name().trim(),resource,account,encrypted,configured?"PENDING":"UNCONFIGURED",sourceId);
       db.update("INSERT INTO \"sources\"(\"id\",\"tenantId\",\"type\",\"name\",\"status\") VALUES (?,?,'PROVIDER',?,?::\"SourceStatus\")",
         sourceId,u.tenantId(),input.name().trim(),configured?"CONNECTED":"DISCONNECTED");
+      db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,account_id,encrypted_token,status,provider_source_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        id,u.tenantId(),u.id(),input.provider(),input.name().trim(),resource,account,encrypted,configured?"PENDING":"UNCONFIGURED",sourceId);
       org.audit(u,"CONNECTION_CREATED",Map.of("id",id,"provider",input.provider()));
     });return owned(u,id);
   }

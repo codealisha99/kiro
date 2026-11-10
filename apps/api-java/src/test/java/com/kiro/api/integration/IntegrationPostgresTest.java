@@ -58,7 +58,7 @@ class IntegrationPostgresTest {
   assertThrows(ResponseStatusException.class,()->service.records(otherAdmin,id,0));
  }
  @Test void fullReconciliationIsIdempotentAndExpiresMissingRecords() {
-  String id=connection("secret-test-token");reply(200,"[{\"id\":1,\"title\":\"Task\",\"state\":\"open\"}]");service.sync(owner,id);
+  String id=connection("secret-test-token");reply(200,"[{\"id\":1,\"number\":1,\"title\":\"Task\",\"state\":\"open\"}]");service.sync(owner,id);
   assertEquals("READY",status(id));assertEquals(1,((List<?>)service.records(owner,id,0)).size());
   service.sync(owner,id);assertEquals(1L,db.queryForObject("SELECT count(*) FROM provider_records",Long.class));
   reply(200,"[]");service.sync(owner,id);assertTrue(((List<?>)service.records(owner,id,0)).isEmpty());
@@ -68,7 +68,7 @@ class IntegrationPostgresTest {
  @Test void rateLimitWaitsAndAuthFailuresHidePreviouslyImportedRecords() {
   String id=connection("secret-test-token");reply(429,"sensitive provider error");service.sync(owner,id);assertEquals("RETRY",status(id));
   assertFalse(service.list(owner).toString().contains("sensitive provider error"));
-  reply(200,"[{\"id\":1,\"title\":\"Task\"}]");service.sync(owner,id);assertEquals("RETRY",status(id));
+  reply(200,"[{\"id\":1,\"number\":1,\"title\":\"Task\"}]");service.sync(owner,id);assertEquals("RETRY",status(id));
   due(id);service.sync(owner,id);assertEquals("READY",status(id));
   reply(403,"private content");service.sync(owner,id);assertEquals("REAUTH",status(id));assertTrue(((List<?>)service.records(owner,id,0)).isEmpty());
  }
@@ -83,7 +83,7 @@ class IntegrationPostgresTest {
   }
  }
  @Test void disconnectDuringFetchDiscardsInFlightResultsAndDeletesCredential() {
-  String id=connection("secret-test-token");remote.set(r->{service.disconnect(owner,id);return new ProviderGateway.Reply(200,"[{\"id\":1,\"title\":\"Late result\"}]","60");});
+  String id=connection("secret-test-token");remote.set(r->{service.disconnect(owner,id);return new ProviderGateway.Reply(200,"[{\"id\":1,\"number\":1,\"title\":\"Late result\"}]","60");});
   service.sync(owner,id);assertEquals("DISCONNECTED",status(id));assertEquals(0L,db.queryForObject("SELECT count(*) FROM provider_records",Long.class));
   assertNull(db.queryForMap("SELECT encrypted_token FROM provider_connections WHERE id=?",id).get("encrypted_token"));
   assertEquals("CANCELLED",db.queryForObject("SELECT status FROM provider_sync_runs",String.class));
@@ -149,12 +149,12 @@ class IntegrationPostgresTest {
   assertEquals("ga-refresh-1",vault.decrypt(refreshed,"org:"+id+":googleanalytics-refresh"));assertFalse(refreshed.contains("ga-refresh-1"));
  }
  @Test void partialScanWithholdsRecordsAndContinuesStoredCursor() {
-  String id=connection("secret-test-token");var records=new ArrayList<String>();for(int i=0;i<100;i++)records.add("{\"id\":"+i+",\"title\":\"Task\"}");
+  String id=connection("secret-test-token");var records=new ArrayList<String>();for(int i=0;i<8;i++)records.add("{\"id\":"+i+",\"number\":"+i+",\"title\":\"Task\"}");
   reply(200,"["+String.join(",",records)+"]");service.sync(owner,id);assertEquals("PENDING",status(id));
   assertEquals("2",db.queryForObject("SELECT cursor FROM provider_connections WHERE id=?",String.class,id));
   assertTrue(((List<?>)service.records(owner,id,0)).isEmpty());
   remote.set(r->{assertTrue(r.uri().toString().endsWith("page=2"));return new ProviderGateway.Reply(200,"[]","60");});due(id);service.sync(owner,id);
-  assertEquals("READY",status(id));assertEquals(100,((List<?>)service.records(owner,id,0)).size());
+  assertEquals("READY",status(id));assertEquals(8,((List<?>)service.records(owner,id,0)).size());
  }
  @Test void backgroundSyncStopsWhenOwnerLosesIntegrationPermission() {
   String id=connection("secret-test-token");

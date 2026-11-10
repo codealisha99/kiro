@@ -71,7 +71,7 @@ class ProviderGatewayTest {
  }
  ProviderGateway gateway(String body,List<HttpRequest> requests) {return new ProviderGateway(new ObjectMapper(),r->{requests.add(r);return new ProviderGateway.Reply(200,body,"60");});}
  @Test void githubNormalizesIssueAndUsesReadOnlyOfficialEndpoint() {
-  var requests=new ArrayList<HttpRequest>();var g=gateway("[{\"id\":1,\"title\":\"Issue\",\"state\":\"open\",\"html_url\":\"https://github.com/a/b/issues/1\"}]",requests);
+  var requests=new ArrayList<HttpRequest>();var g=gateway("[{\"id\":1,\"number\":1,\"title\":\"Issue\",\"state\":\"open\",\"html_url\":\"https://github.com/a/b/issues/1\"}]",requests);
   var p=g.fetch("github","a/b","","test-token",null);assertEquals("ISSUE",p.records().getFirst().kind());assertNull(p.nextCursor());
   assertEquals("api.github.com",requests.getFirst().uri().getHost());assertEquals("GET",requests.getFirst().method());
   assertFalse(requests.getFirst().uri().toString().contains("test-token"));

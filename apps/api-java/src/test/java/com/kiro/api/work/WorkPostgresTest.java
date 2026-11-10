@@ -229,7 +229,7 @@ class WorkPostgresTest {
     tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),false));
     var sources=new WorkSourceService(db,work,new com.kiro.api.organization.OrganizationService(db,new ObjectMapper()));
     String c=UUID.randomUUID().toString(),r=UUID.randomUUID().toString();
-    db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at) VALUES (?,'org','admin','linear','Synthetic','team','READY',now())",c);
+    db.update("INSERT INTO \"sources\"(\"id\",\"tenantId\",\"type\",\"name\") VALUES (?,'org','PROVIDER','Synthetic')","src-"+c);db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at,provider_source_id) VALUES (?,'org','admin','linear','Synthetic','team','READY',now(),'src-'||?)",c,c);
     db.update("INSERT INTO provider_records(id,tenant_id,connection_id,external_id,kind,title,generation) VALUES (?,'org',?,'external-1','TASK','Shared issue','generation')",r,c);
     assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(admin,p,new WorkSourceService.MappingInput(r,null,"Related",false))));
     assertThrows(ResponseStatusException.class,()->tx.execute(t->sources.map(outsider,p,new WorkSourceService.MappingInput(r,null,"Related",true))));
@@ -258,7 +258,7 @@ class WorkPostgresTest {
     tx.execute(t->work.grant(owner,p,new GrantInput(reader.id(),"READ"),false));
     var sources=new WorkSourceService(db,work,new com.kiro.api.organization.OrganizationService(db,new ObjectMapper()));
     String c=UUID.randomUUID().toString();
-    db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at) VALUES (?,'org','admin','hubspot','Synthetic','portal','READY',now())",c);
+    db.update("INSERT INTO \"sources\"(\"id\",\"tenantId\",\"type\",\"name\") VALUES (?,'org','PROVIDER','Synthetic')","src-"+c);db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,last_success_at,provider_source_id) VALUES (?,'org','admin','hubspot','Synthetic','portal','READY',now(),'src-'||?)",c,c);
     Map<String,String> records=new LinkedHashMap<>();
     for(String kind:List.of("DEAL","INVOICE","EMPLOYEE","MARKETING_METRIC")) {
       String id=UUID.randomUUID().toString(); records.put(kind,id);

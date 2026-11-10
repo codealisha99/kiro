@@ -39,7 +39,7 @@ class WorkActionPostgresTest {
   tx.execute(t->work.grant(owner,project,new WorkDtos.GrantInput(editor.id(),"WRITE"),false));
   tx.execute(t->work.grant(owner,project,new WorkDtos.GrantInput(reader.id(),"READ"),false));
   connection=UUID.randomUUID().toString();var vault=new CredentialVault(Base64.getEncoder().encodeToString(new byte[32]));
-  db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,encrypted_token,last_success_at) VALUES (?,'org','owner','github','Synthetic','example/repo','READY',?,now())",connection,vault.encrypt("synthetic-token","org:"+connection));
+  db.update("INSERT INTO \"sources\"(\"id\",\"tenantId\",\"type\",\"name\") VALUES (?,'org','PROVIDER','Synthetic')","src-"+connection);db.update("INSERT INTO provider_connections(id,tenant_id,owner_id,provider,name,resource,status,encrypted_token,last_success_at,provider_source_id) VALUES (?,'org','owner','github','Synthetic','example/repo','READY',?,now(),'src-'||?)",connection,vault.encrypt("synthetic-token","org:"+connection),connection);
  }
  String propose() {return (String)((Map<?,?>)actions.propose(owner,project,new WorkActionService.Proposal(connection,"Reviewed title","Exact body","Evidence and risks",true))).get("id");}
  void approve(String id) {actions.decide(editor,project,id,new WorkActionService.Decision(1,true,"Reviewed"));}
