@@ -5,17 +5,32 @@ import type { FormEvent } from "react";
 import type { DocumentListItem, EmbedStatus, SourceDto } from "@kiro/shared";
 import {
   Alert,
+  Badge,
   Button,
   Dialog,
   Field,
   FileUpload,
-  StatefulButton,
   Input,
+  PageHeader,
+  StatefulButton,
   Select,
   Textarea,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import {
+  ACCESS_FILTERS,
+  accessCounts,
+  accessLabel,
+  accessTone,
+  documentStatusLabel,
+  documentStatusTone,
+  filterDocuments,
+  sortDocuments,
+  type AccessFilter,
+  type LibrarySort,
+} from "@/lib/library-model";
 import { WorkspaceIcon } from "./WorkspaceIcon";
+import "./knowledge-library.css";
 
 export default function KnowledgeLibrary({
   documents,
@@ -32,8 +47,8 @@ export default function KnowledgeLibrary({
   onRefresh: () => Promise<void>;
   addRequest?: number;
 }) {
-  const [access, setAccess] = useState("all");
-  const [sort, setSort] = useState("updated");
+  const [access, setAccess] = useState<AccessFilter>("all");
+  const [sort, setSort] = useState<LibrarySort>("updated");
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(addRequest > 0);
   useEffect(() => {
@@ -52,19 +67,12 @@ export default function KnowledgeLibrary({
     () => new Map(sources.map((source) => [source.id, source.name])),
     [sources],
   );
-  const filtered = documents
-    .filter(
-      (doc) =>
-        `${doc.title} ${names.get(doc.sourceId) ?? ""}`
-          .toLowerCase()
-          .includes(search.trim().toLowerCase()) &&
-        (access === "all" || doc.classification === access),
-    )
-    .sort((a, b) =>
-      sort === "title"
-        ? a.title.localeCompare(b.title)
-        : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+  const counts = useMemo(() => accessCounts(documents), [documents]);
+  const filtered = useMemo(
+    () => sortDocuments(filterDocuments(documents, names, { search, access }), sort),
+    [documents, names, search, access, sort],
+  );
+  const filtersActive = search.trim() !== "" || access !== "all";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -130,25 +138,24 @@ export default function KnowledgeLibrary({
 
   return (
     <section className="knowledge-library" aria-labelledby="library-title">
-      <div className="library-heading">
-        <div>
-          <h1 id="library-title">Your library</h1>
-          <p>
-            The knowledge behind your answers. Keep it together, keep it useful.
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setError(null);
-            setFile(null);
-            setAdding(true);
-          }}
-        >
-          <WorkspaceIcon name="plus" />
-          Add document
-        </Button>
-      </div>
+      <PageHeader
+        id="library-title"
+        title="Your library"
+        subtitle="The knowledge behind your answers. Keep it together, keep it useful."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setError(null);
+              setFile(null);
+              setAdding(true);
+            }}
+          >
+            <WorkspaceIcon name="plus" />
+            Add document
+          </Button>
+        }
+      />
       {notice && (
         <p className="library-notice" role="status">
           <WorkspaceIcon name="check" />
@@ -156,121 +163,131 @@ export default function KnowledgeLibrary({
         </p>
       )}
       {error && !adding && <Alert tone="danger">{error}</Alert>}
-      <div className="library-tools">
+
+      <div className="library-toolbar">
         <div className="library-search">
           <WorkspaceIcon name="search" />
           <Input
             aria-label="Search documents"
-            placeholder="Find a document…"
+            placeholder="Search by title or source"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        <div className="library-filters">
-          <Select
-            aria-label="Filter by document access"
-            value={access}
-            onChange={(event) => setAccess(event.target.value)}
-          >
-            <option value="all">All access levels</option>
-            <option value="internal">Workspace</option>
-            <option value="public">Public within workspace</option>
-            <option value="confidential">Confidential</option>
-            <option value="restricted">Restricted</option>
-          </Select>
-          <Select
-            aria-label="Sort documents"
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-          >
-            <option value="updated">Recently updated</option>
-            <option value="title">Title A–Z</option>
-          </Select>
+        <div className="library-chips" role="group" aria-label="Filter by access">
+          {ACCESS_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              className="library-chip"
+              aria-pressed={access === filter.id}
+              onClick={() => setAccess(filter.id)}
+            >
+              {filter.label}
+              <span className="library-chip-count">{counts[filter.id]}</span>
+            </button>
+          ))}
         </div>
+        <Select
+          aria-label="Sort documents"
+          className="library-sort"
+          value={sort}
+          onChange={(event) => setSort(event.target.value as LibrarySort)}
+        >
+          <option value="updated">Recently updated</option>
+          <option value="title">Title A–Z</option>
+        </Select>
       </div>
-      <div className="library-list-heading">
-        <span>Documents</span>
-        <span className="library-count" role="status">
-          {filtered.length === documents.length
-            ? `${documents.length} document${documents.length === 1 ? "" : "s"}`
-            : `${filtered.length} of ${documents.length} documents`}
-        </span>
-      </div>
+      <p className="library-count" role="status">
+        {filtered.length === documents.length
+          ? `${documents.length} document${documents.length === 1 ? "" : "s"}`
+          : `${filtered.length} of ${documents.length} documents`}
+      </p>
       {embedStatus && embedStatus.totalChunks > 0 && !embedStatus.ready && (
-        <p className="library-status" role="status">
+        <p className="library-status-note" role="status">
           <span className="status-dot" />
           Documents are saved. Search preparation is pending.
         </p>
       )}
-      <div className="document-list">
-        {filtered.map((doc) => (
-          <button
-            key={doc.id}
-            className="document-row"
-            onClick={() => onOpen(doc.id)}
-          >
-            <span className="document-icon">
-              <WorkspaceIcon name="file" />
-            </span>
-            <span className="document-info">
-              <strong>{doc.title}</strong>
-              <span>{names.get(doc.sourceId) ?? "Uploaded document"}</span>
-            </span>
-            <span className={`document-access ${doc.classification}`}>
-              <WorkspaceIcon name="lock" />
-              {doc.classification === "internal"
-                ? "Workspace"
-                : doc.classification === "restricted"
-                  ? "Restricted"
-                  : doc.classification === "confidential"
-                    ? "Confidential"
-                    : "Public"}
-            </span>
-            <span className="document-updated">
-              {new Date(doc.updatedAt).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-              })}
-            </span>
-            <WorkspaceIcon name="chevron" className="document-chevron" />
-          </button>
-        ))}
-        {filtered.length === 0 && (
-          <div className="library-empty">
-            <WorkspaceIcon name="book" width="32" height="32" />
-            <h2>
-              {documents.length
-                ? "No matching documents"
-                : "A place for what your team knows"}
-            </h2>
-            <p>
-              {documents.length
-                ? "Try a different search or access level."
-                : "Add a policy, a project brief, or a useful piece of context."}
-            </p>
-            {!!documents.length && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setSearch("");
-                  setAccess("all");
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
-            {!documents.length && (
-              <Button
-                variant="secondary"
-                disabled={seeding}
-                onClick={() => void seed()}
-              >
-                {seeding ? "Adding samples…" : "Try with sample documents"}
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+
+      {filtered.length > 0 ? (
+        <div className="library-table-wrap">
+          <table className="library-table" aria-label="Documents">
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col" className="col-optional">Source</th>
+                <th scope="col">Access</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="col-optional is-numeric">Versions</th>
+                <th scope="col" className="is-numeric">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((doc) => (
+                <tr key={doc.id}>
+                  <td>
+                    <button type="button" className="library-title" onClick={() => onOpen(doc.id)}>
+                      <span className="library-doc-icon" aria-hidden="true">
+                        <WorkspaceIcon name="file" />
+                      </span>
+                      <span>{doc.title}</span>
+                    </button>
+                  </td>
+                  <td className="col-optional library-muted">{names.get(doc.sourceId) ?? "Uploaded document"}</td>
+                  <td>
+                    <Badge tone={accessTone(doc.classification)}>{accessLabel(doc.classification)}</Badge>
+                  </td>
+                  <td>
+                    <span className={`library-status tone-${documentStatusTone(doc.status)}`}>
+                      <span className="library-status-dot" aria-hidden="true" />
+                      {documentStatusLabel(doc.status)}
+                    </span>
+                  </td>
+                  <td className="col-optional is-numeric">{doc.versionCount}</td>
+                  <td className="is-numeric library-muted">
+                    {new Date(doc.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="library-empty">
+          <WorkspaceIcon name="book" width="32" height="32" />
+          <h2>
+            {documents.length
+              ? "No matching documents"
+              : "A place for what your team knows"}
+          </h2>
+          <p>
+            {documents.length
+              ? "Try a different search or access level."
+              : "Add a policy, a project brief, or a useful piece of context."}
+          </p>
+          {filtersActive && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearch("");
+                setAccess("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+          {!documents.length && (
+            <Button
+              variant="secondary"
+              disabled={seeding}
+              onClick={() => void seed()}
+            >
+              {seeding ? "Adding samples…" : "Try with sample documents"}
+            </Button>
+          )}
+        </div>
+      )}
       {documents.length > 0 && (
         <p className="library-footnote">
           <WorkspaceIcon name="lock" />

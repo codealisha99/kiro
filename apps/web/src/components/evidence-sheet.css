@@ -1,0 +1,74 @@
+/* Source and document sheet. Workspace.tsx opens citations and library documents in the .document-dialog;
+   on desktop it slides in from the right as an evidence sheet, and on small screens it fills the viewport. */
+.ui-dialog.document-dialog {
+  margin: 0 0 0 auto;
+  width: min(480px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border-width: 0 0 0 1px;
+  box-shadow: var(--shadow-overlay);
+}
+/* Only the open dialog lays out as a column; a closed <dialog> must stay display:none. */
+.ui-dialog.document-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.ui-dialog.document-dialog .ui-dialog-header {
+  flex: none;
+  padding: var(--space-4) var(--space-5);
+}
+.ui-dialog.document-dialog .ui-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+.document-dialog .evidence-title {
+  font-family: var(--font-editorial);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  line-height: 1.3;
+  margin: 0;
+}
+.document-dialog .source-reader { gap: var(--space-4); }
+.document-dialog .source-meta { justify-content: space-between; flex-wrap: wrap; }
+.document-dialog .source-excerpt { border-radius: var(--radius-md); margin-top: 0; }
+.document-dialog .source-full-document { border-top: 0; }
+.document-dialog .source-full-document summary { border-top: 1px solid var(--color-border); }
+.document-dialog .passage {
+  padding-top: var(--space-4);
+  font-size: var(--text-md);
+  line-height: 1.75;
+}
+.document-dialog .passage mark {
+  border-radius: var(--radius-sm);
+  padding-inline: 2px;
+}
+
+/* Version history: one row per version, with its read action at the end. */
+.document-dialog .document-management { display: grid; gap: var(--space-3); }
+.document-dialog .document-versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.document-dialog .document-versions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.document-dialog .document-versions li > strong { font-weight: 500; }
+.document-dialog .document-versions time,
+.document-dialog .document-versions li > span {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.document-dialog .document-versions .btn { margin-left: auto; }
+.document-dialog .document-management > .btn { justify-self: start; }
+
+@media (max-width: 600px) {
+  .ui-dialog.document-dialog .ui-dialog-body { padding: var(--space-4); }
+}

@@ -12,6 +12,10 @@ export interface DashboardData {
   metrics: DataRow; tasks: DataRow[]; risks: DataRow[]; projects?: DataRow[]; workload?: DataRow[];
   teams?: DataRow[]; departments?: DataRow[]; reports?: DataRow[]; dependencies?: DataRow[]; resourceGaps?: DataRow[];
 }
+export interface OrgMetrics { generatedAt: string; weeks: number; method: string; summary: DataRow; weekly: DataRow[]; teams?: DataRow[]; departments?: DataRow[]; people?: DataRow[] }
+export interface OrgGraphNode { id: string; type: string; name: string }
+export interface OrgGraphEdge { id: number; kind: string; source: string; target: string; label?: string }
+export interface OrgGraph { nodes: OrgGraphNode[]; edges: OrgGraphEdge[]; method: string; generatedAt: string }
 export interface Provider { id: string; name: string; resourceLabel: string; accountLabel: string; entities: string; permissions: string; sync: string; visibility: string }
 export interface Catalog { canManage: boolean; credentialStorageReady: boolean; xeroOAuthConfigured: boolean; googleAnalyticsOAuthConfigured: boolean; googleDriveOAuthConfigured: boolean; providers: Provider[] }
 export const orgApi = {
@@ -19,6 +23,8 @@ export const orgApi = {
   dashboard: (view: DashboardView) => request<DashboardData>(`/organization/dashboard?view=${view}`),
   save: (path: string, body: unknown, method = "POST") => request(`/organization/${path}`, { method, body }),
   audit: () => request<DataRow[]>("/organization/audit"),
+  metrics: (weeks: number) => request<OrgMetrics>(`/organization/metrics?weeks=${weeks}`),
+  graph: () => request<OrgGraph>("/organization/graph"),
   teams: () => request<DataRow[]>("/organization/my-teams"),
   audience: (id: string, teamId: string | null, restricted: boolean) => request(`/work/projects/${encodeURIComponent(id)}/audience`, { method: "PUT", body: { teamId, restricted } }),
   catalog: () => request<Catalog>("/integrations/catalog"),

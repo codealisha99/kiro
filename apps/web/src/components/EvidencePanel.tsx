@@ -1,8 +1,10 @@
 "use client";
 
 import { Alert, Badge } from "@/components/ui";
+import { accessLabel, accessTone } from "@/lib/library-model";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import type { CitationSource, DocumentDetail } from "@kiro/shared";
+import "./evidence-sheet.css";
 
 export default function EvidencePanel({
   document,
@@ -34,15 +36,9 @@ export default function EvidencePanel({
   const historical = selectedVersion !== currentVersion;
   const match = excerpt ? findPassage(document.content, excerpt) : null;
   return (
-    <div className="source-reader">
+    <div className="source-reader evidence-sheet">
       <div className="source-meta">
-        <Badge className={document.classification}>
-          {document.classification === "internal"
-            ? "Workspace"
-            : document.classification === "restricted"
-              ? "Restricted"
-              : document.classification}
-        </Badge>
+        <Badge tone={accessTone(document.classification)}>{accessLabel(document.classification)}</Badge>
         <span>Version {selectedVersion}{historical ? " · Earlier version" : " · Current"}</span>
       </div>
       <h3 className="evidence-title">{document.title}</h3>
