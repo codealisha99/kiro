@@ -323,3 +323,42 @@ Rules:
 - Hide visible text with the `sr-only` pattern, not `display: none`, when it is the control's accessible name (the mobile search button).
 
 Verified: typecheck, lint, 72 web tests, the production build, zero serious axe violations on the landing page and on every app route at 1440px and 390px in both themes, no horizontal overflow, and no React warnings in development on any route.
+
+## Company readiness: setup, graphs and administration — 2026-11-10
+
+### First run (`HomeSetup`, `lib/setup-checklist.ts`)
+
+Whoever can manage the organization (`/organization` `canManage`) sees a six-step guide at the top of Home until every step is done: add knowledge, connect a tool (a `READY` connection), add teams, invite people, set reporting lines and roles (both required), and set a goal. Each step is checked against real records, never a local "done" flag. The demo viewer created by the sample documents (`viewer@<slug>.demo`) is not counted as an invited colleague. Each step's button opens the place where that work happens; `?tab=` opens an Organization tab, falling back to Overview when the tab isn't visible. "Hide for now" is remembered (`localStorage` `kiro-setup-hidden`), and a one-line summary leads back to the guide.
+
+The workspace menu shows the company's name: `/auth/me`, login and register return `tenantName` on the signed-in user's own record.
+
+### Graphs by screen
+
+| Screen | Graph | Question it answers |
+| --- | --- | --- |
+| Goals | Goal health (`StackedBar`) | How healthy are we? |
+| Goals | Furthest behind today's pace (`HBarChart`, points) | Which goals are slipping? |
+| Goals | Progress against plan, by level (`BarChart`) | Which level of the company is behind? |
+| Projects | Task status (`StackedBar`: done, open, blocked) | Where does the work stand? |
+| Projects | Completed per week | Are we delivering? |
+| Projects | Projects by completion (`HBarChart`) | Which projects are nearly done, which lag? |
+| Library | How current is it? (30 days, 6 months, older) | Is our guidance still current? |
+| Admin | Questions per day, answered and failed | Are people using it, and is it working? |
+| Admin | Answer feedback, search preparation | Are answers good, and is knowledge ready? |
+
+Helpers are pure and tested: `behindPace` and `progressByScope` (`goal-view.ts`), `taskStatusSegments` and `projectCompletion` (`work-metrics.ts`), `freshnessSegments` (`library-model.ts`), and `questionsPerDay`, `feedbackSegments`, `searchReadiness` and `decisionLabel` (`admin-view.ts`). Category labels stay short; put counts in the description so axis labels never collide.
+
+### Admin console (`/admin`)
+
+Sections: Usage, Activity, Document processing, Audit log (the 50 most recent events, with person names and readable access decisions), Service performance, Answer quality. Each secondary panel loads and fails on its own, with its own message. Wide tables are focusable, labeled scroll regions.
+
+`/admin/ingestion` is tenant-scoped. The job queue is shared by every workspace, so it never returns queue lengths or raw dead-letter entries; failures are returned only when their document version belongs to the caller's workspace (`AdminIngestionTest`).
+
+### Fixes to shared pieces
+
+- `useChartWidth` uses a callback ref. A chart that mounts in its loading state now measures itself once its body appears; before, it stayed at the 640px fallback and overflowed its panel.
+- `niceDomain` never invents negative values for flat non-negative data, so all-zero counts get a 0–1 axis, not −1 to 1.
+- `shell-view-in` is defined once, in `primitives.css`.
+- The `/design-system` shell sample drops its sidebar below 760px, as the app does.
+
+Verified: 171 Java tests, 84 web tests, typecheck, lint, the production build; zero serious axe violations, no horizontal overflow and no console errors on 12 screens × 2 widths × 2 themes; no React warnings in development; setup links, hide/show and step completion checked in the browser against a fresh workspace.
