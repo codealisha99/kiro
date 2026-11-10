@@ -108,6 +108,43 @@ public class RetrievalService {
   }
 
   /**
+   * Latest changes from connected tools (GitHub, Linear, Slack, Drive…), newest first: the
+   * first chunk of each provider document whose content changed in the window. Same tenant,
+   * version, freshness and ACL filters as search. Recency is not relevance, so score is fixed.
+   */
+  public List<RetrievedChunk> recent(AuthenticatedPrincipal user, int days, int limit) {
+    String sql = """
+        SELECT * FROM (
+          SELECT DISTINCT ON (d."id") dc."id" AS "chunkId", d."id" AS "documentId", dv."id" AS "versionId",
+                 dv."version", d."title", d."sourceId", s."name" AS "sourceName",
+                 d."classification", dv."createdAt" AS "updatedAt", dc."content", 0.5 AS score
+          FROM "document_chunks" dc
+          JOIN "document_versions" dv ON dv."id" = dc."documentVersionId"
+          JOIN "documents" d ON d."id" = dv."documentId"
+          JOIN "sources" s ON s."id" = d."sourceId"
+          WHERE d."tenantId" = ?
+            AND d."deleted" = false
+            AND s."type" = 'PROVIDER'
+            AND dv."approvalStatus" = 'APPROVED'
+            AND dv."createdAt" > now() - make_interval(days => ?)
+            AND NOT EXISTS (SELECT 1 FROM "document_versions" newer
+              WHERE newer."documentId" = d."id" AND newer."approvalStatus" = 'APPROVED'
+                AND newer."version" > dv."version")
+            AND EXISTS (
+              SELECT 1 FROM provider_connections pc WHERE pc.provider_source_id=d."sourceId"
+                AND pc.status='READY' AND pc.last_success_at>now()-interval '24 hours'
+            )
+        """ + aclPredicate() + """
+          ORDER BY d."id", (dc."metadata"->>'index')::int NULLS LAST
+        ) latest
+        ORDER BY "updatedAt" DESC
+        LIMIT ?
+        """;
+    return jdbc.query(sql, this::mapRow, user.tenantId(), days, user.id(),
+        user.id(), user.roleUpper(), limit);
+  }
+
+  /**
    * Visibility rule (fail-closed): PUBLIC/INTERNAL for the tenant, CONFIDENTIAL/RESTRICTED
    * only for owner or explicit USER/ROLE grant. Placeholders: ownerId, userId, roleUpper.
    */

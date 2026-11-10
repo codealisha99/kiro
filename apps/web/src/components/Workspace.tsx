@@ -59,8 +59,8 @@ const PROMPTS = [
     icon: "search" as const,
   },
   {
-    label: "Catch up on a client",
-    query: "What happened with Client Helios?",
+    label: "Catch up on everything",
+    query: "What's happening?",
     icon: "message" as const,
   },
 ];

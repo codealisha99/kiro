@@ -166,4 +166,39 @@ class RagServiceTest {
     assertEquals("conv9", res.get("conversationId"));
     verify(conversations, never()).save(any());
   }
+
+  @Test
+  void activityQuestionsAreRecognized() {
+    for (String q : List.of("What's happening?", "what is going on", "Whats new today?",
+        "what’s there?", "Catch me up on the week", "any updates on launch?")) {
+      assertTrue(RagService.isActivityQuestion(q), q);
+    }
+    for (String q : List.of("What is there in the refund policy?", "What's new in the handbook?",
+        "refund policy?")) {
+      assertFalse(RagService.isActivityQuestion(q), q);
+    }
+  }
+
+  @Test
+  void activityQuestionSummarizesRecentProviderRecords() {
+    var recent = List.of(chunk("c1", "d1", "Fix login bug", 0.5), chunk("c2", "d2", "#eng thread", 0.5));
+    when(retrieval.recent(user, RagService.ACTIVITY_DAYS, RagService.ACTIVITY_LIMIT)).thenReturn(recent);
+    when(conversations.save(any())).thenAnswer(inv -> { Conversation c = inv.getArgument(0); c.setId("conv"); return c; });
+    when(ai.generate(contains("most recently changed records"), anyString(), any(), any())).thenReturn(
+        new AiServiceClient.GenerateResult("STATUS:answered\nLogin fix shipped [1]; eng discussing [2].", "m", "1", Map.of()));
+
+    var result = service().query(user, "What's happening?", null);
+
+    assertEquals(2, ((List<?>) result.get("sources")).size());
+    verify(retrieval, never()).search(any(), anyString(), anyInt());
+  }
+
+  @Test
+  void activityQuestionFallsBackToSearchWithoutRecentRecords() {
+    when(retrieval.recent(user, RagService.ACTIVITY_DAYS, RagService.ACTIVITY_LIMIT)).thenReturn(List.of());
+    when(retrieval.search(eq(user), anyString(), eq(5))).thenReturn(List.of());
+    when(conversations.save(any())).thenAnswer(inv -> { Conversation c = inv.getArgument(0); c.setId("conv"); return c; });
+
+    assertEquals("unknown", service().query(user, "What's going on?", null).get("status"));
+  }
 }

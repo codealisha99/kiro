@@ -74,6 +74,32 @@ class RetrievalPostgresTest {
     assertTrue(retrieval.searchKeyword(reader(), "obsolete-only").isEmpty());
   }
 
+  @Test
+  void recentReturnsOnlyFreshVisibleProviderChangesNewestFirst() {
+    jdbc.execute("INSERT INTO \"Tenant\" (id, name) VALUES ('tenant', 'Tenant') ON CONFLICT DO NOTHING");
+    jdbc.execute("INSERT INTO users (id, \"tenantId\", email, role) VALUES ('reader', 'tenant', 'reader@example.com', 'EMPLOYEE') ON CONFLICT DO NOTHING");
+    jdbc.execute("INSERT INTO sources (id, \"tenantId\", type, name) VALUES ('gh', 'tenant', 'PROVIDER', 'GitHub'), ('stale', 'tenant', 'PROVIDER', 'Slack')");
+    jdbc.execute("INSERT INTO provider_connections (id, tenant_id, owner_id, provider, name, resource, status, last_success_at, provider_source_id) VALUES "
+        + "('conn-gh', 'tenant', 'reader', 'github', 'GitHub', 'acme/app', 'READY', now(), 'gh'), "
+        + "('conn-stale', 'tenant', 'reader', 'slack', 'Slack', 'C1', 'READY', now() - interval '3 days', 'stale')");
+    insertProviderDoc("pr-old", "gh", "reader", "now() - interval '2 days'");
+    insertProviderDoc("pr-new", "gh", "reader", "now()");
+    insertProviderDoc("pr-ancient", "gh", "reader", "now() - interval '30 days'");
+    insertProviderDoc("pr-other-owner", "gh", "owner", "now()");
+    insertProviderDoc("slack-stale", "stale", "reader", "now()");
+
+    var recent = retrieval.recent(reader(), 14, 10);
+
+    assertEquals(List.of("pr-new", "pr-old"), recent.stream().map(RetrievedChunk::documentId).toList());
+  }
+
+  private static void insertProviderDoc(String id, String sourceId, String ownerId, String createdAt) {
+    jdbc.update("INSERT INTO documents (id, \"tenantId\", \"sourceId\", \"externalId\", title, \"ownerId\", classification) VALUES (?, 'tenant', ?, ?, ?, ?, 'RESTRICTED')",
+        id, sourceId, id, id, ownerId);
+    jdbc.update("INSERT INTO document_versions (id, \"documentId\", version, \"contentHash\", \"approvalStatus\", \"createdAt\") VALUES (?, ?, 1, 'hash', 'APPROVED', " + createdAt + ")", id, id);
+    jdbc.update("INSERT INTO document_chunks (id, \"documentVersionId\", content, metadata) VALUES (?, ?, 'Provider update', '{\"index\":0}'::jsonb)", id, id);
+  }
+
   private static AuthenticatedPrincipal reader() {
     return new AuthenticatedPrincipal("reader", "reader@example.com", "tenant", "employee");
   }

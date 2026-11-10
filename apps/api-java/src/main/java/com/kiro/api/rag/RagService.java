@@ -34,6 +34,14 @@ public class RagService {
 
   static final int TOP_K = 5;
   static final int EXCERPT_LENGTH = 240;
+  static final int ACTIVITY_DAYS = 14;
+  static final int ACTIVITY_LIMIT = 10;
+  // Bare "what's happening?"-style questions, or explicit catch-up phrasing anywhere.
+  static final Pattern ACTIVITY = Pattern.compile(
+      "^\\W*(?:so\\W+|hey\\W+)?what(?:[’']?s| is| has)\\s+(?:been\\s+)?(?:happening|going on|new|up|there|changed)"
+          + "(?:\\s+(?:today|lately|recently|this week|across the company|at work))?\\W*$"
+          + "|\\b(?:catch me up|recent activity|latest (?:updates?|activity|changes)|any updates?)\\b",
+      Pattern.CASE_INSENSITIVE);
 
   static final String SYSTEM_PROMPT = """
       You are Kiro, an internal enterprise knowledge assistant.
@@ -134,7 +142,11 @@ public class RagService {
           return answerPayload(request, conversation, question, answer, "answered", 1.0, List.of());
         }
       }
-      List<RetrievedChunk> chunks = retrieval.search(user, question, TOP_K);
+      List<RetrievedChunk> recent = isActivityQuestion(question)
+          ? retrieval.recent(user, ACTIVITY_DAYS, ACTIVITY_LIMIT)
+          : List.of();
+      boolean activity = !recent.isEmpty();
+      List<RetrievedChunk> chunks = activity ? recent : retrieval.search(user, question, TOP_K);
 
       if (chunks.isEmpty()) {
         String answer = "I don't have sufficient information to answer that. Try asking about ingested documents.";
@@ -157,7 +169,8 @@ public class RagService {
       Map<String, Object> usage = null;
       try {
         var generation = ai.generate(
-            "Question: " + question + "\n\nEvidence:\n" + context, SYSTEM_PROMPT, 1024, null);
+            "Question: " + question + (activity ? ACTIVITY_INSTRUCTION : "")
+                + "\n\nEvidence:\n" + context, SYSTEM_PROMPT, 1024, null);
         parsed = parseAnswer(generation.text());
         model = generation.model();
         modelVersion = generation.modelVersion();
@@ -203,6 +216,14 @@ public class RagService {
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
           "The AI service is currently unavailable.");
     }
+  }
+
+  static final String ACTIVITY_INSTRUCTION = "\n\nThe evidence is the most recently changed records "
+      + "from connected tools (GitHub, Linear, Slack, Drive and others), newest first. Summarize what is "
+      + "happening, grouped by source, highlighting blockers, decisions and open questions. Cite every item.";
+
+  static boolean isActivityQuestion(String question) {
+    return ACTIVITY.matcher(question).find();
   }
 
   // ---- internals (same semantics as brain.service.ts) ----
@@ -353,6 +374,7 @@ public class RagService {
         row.get("name") + ": " + row.get("tasks") + " tasks, " + row.get("blocked") + " blocked");
     return out.append("\nThese figures reflect records visible to your current access. Hours are estimates, and this snapshot does not forecast delivery or utilization.").toString();
   }
+
 
   @SuppressWarnings("unchecked")
   private static void appendRows(StringBuilder out, Map<String, Object> data, String key,
