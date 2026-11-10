@@ -55,7 +55,8 @@ export function niceDomain(values: readonly number[], options: { includeZero?: b
     max = Math.max(max, 0);
   }
   if (min === max) {
-    min -= 1;
+    // A flat series still needs a range. Never invent negatives for non-negative data (all-zero counts).
+    min = min >= 0 ? Math.max(0, min - 1) : min - 1;
     max += 1;
   }
   const ticks = niceTicks(min, max, options.count ?? 4);

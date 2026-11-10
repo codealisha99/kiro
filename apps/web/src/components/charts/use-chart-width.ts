@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 // Measures the container width so SVG charts redraw at the real size. The fallback covers the first paint.
+// A callback ref, not useRef: a chart that mounts in its loading state renders the measured element later,
+// and the observer must attach whenever that element appears (otherwise it stays at the fallback width).
 export function useChartWidth<T extends HTMLElement>(fallback = 640) {
-  const ref = useRef<T>(null);
+  const [element, setElement] = useState<T | null>(null);
   const [width, setWidth] = useState(fallback);
   useEffect(() => {
-    const element = ref.current;
     if (!element) return;
     const update = () => setWidth(Math.max(0, Math.floor(element.clientWidth)));
     update();
@@ -15,6 +16,6 @@ export function useChartWidth<T extends HTMLElement>(fallback = 640) {
     const observer = new ResizeObserver(update);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
-  return [ref, width] as const;
+  }, [element]);
+  return [setElement, width] as const;
 }

@@ -36,6 +36,9 @@ test("nice domain includes zero on request and widens empty ranges", () => {
   const [low, high] = scale.niceDomain([7, 7]);
   assert.ok(low <= 6 && high >= 8);
   assert.deepEqual(scale.niceDomain([]), [0, 1]);
+  // All-zero counts (a new workspace) must not get a negative axis.
+  assert.deepEqual(scale.niceDomain([0, 0, 0]), [0, 1]);
+  assert.ok(scale.niceDomain([-3, -3])[0] < -3);
 });
 
 test("nearest index finds the closest sorted value", () => {
