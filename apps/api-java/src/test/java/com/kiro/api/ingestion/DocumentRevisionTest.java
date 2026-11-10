@@ -45,6 +45,17 @@ class DocumentRevisionTest {
             .doesNotExist("Access-Control-Allow-Origin"));
   }
 
+  @Test
+  void throttledLoginAnswers429ThroughTheFullFilterChain() throws Exception {
+    var login = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/auth/login")
+        .contentType("application/json").content("{}")
+        .with(request -> { request.setRemoteAddr("192.0.2.50"); return request; });
+    for (int i = 0; i < 30; i++) mvc.perform(login);
+    mvc.perform(login)
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isTooManyRequests())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "60"));
+  }
+
   AuthenticatedPrincipal owner() {
     return new AuthenticatedPrincipal("owner", "owner@example.com", UUID.randomUUID().toString(), "employee");
   }

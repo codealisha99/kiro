@@ -8,7 +8,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.web.server.ResponseStatusException;
 
 class RateLimitFilterTest {
   // Redis unavailable: the filter must still limit through its in-memory fallback.
@@ -26,9 +25,12 @@ class RateLimitFilterTest {
     for (int i = 0; i < RateLimitFilter.MAX_REQUESTS; i++) {
       filter.doFilter(post("/auth/login", "203.0.113.7"), new MockHttpServletResponse(), new MockFilterChain());
     }
-    var error = assertThrows(ResponseStatusException.class,
-        () -> filter.doFilter(post("/auth/login", "203.0.113.7"), new MockHttpServletResponse(), new MockFilterChain()));
-    assertEquals(429, error.getStatusCode().value());
+    var refused = new MockHttpServletResponse();
+    var chain = new MockFilterChain();
+    filter.doFilter(post("/auth/login", "203.0.113.7"), refused, chain);
+    assertEquals(429, refused.getStatus());
+    assertEquals("60", refused.getHeader("Retry-After"));
+    assertNull(chain.getRequest(), "a refused request must not reach the login handler");
     // Another address keeps its own budget.
     assertDoesNotThrow(() -> filter.doFilter(post("/auth/login", "198.51.100.9"), new MockHttpServletResponse(), new MockFilterChain()));
   }

@@ -12,7 +12,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 30 requests / 60s per user-or-IP on sensitive endpoints (mirrors ThrottleGuard:
@@ -50,16 +49,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
         .map(com.kiro.api.security.AuthenticatedPrincipal::id)
         .orElseGet(() -> Optional.ofNullable(req.getRemoteAddr()).orElse("anon"));
     String key = "throttle:" + req.getMethod() + ":" + req.getRequestURI() + ":" + who;
+    if (overLimit(key)) {
+      // Written here rather than thrown: an exception from a servlet filter becomes an /error
+      // dispatch, which Spring Security answers with 401 for anonymous callers.
+      res.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+      res.setHeader("Retry-After", String.valueOf(WINDOW.toSeconds()));
+      res.setContentType("application/json");
+      res.getWriter().write("{\"message\":\"Too many requests, try again later\"}");
+      return;
+    }
+    chain.doFilter(req, res);
+  }
+
+  private boolean overLimit(String key) {
     try {
       Long count = redis.opsForValue().increment(key);
       if (count != null && count == 1L) {
         redis.expire(key, WINDOW);
       }
-      if (count != null && count > MAX_REQUESTS) {
-        throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many requests, try again later");
-      }
-    } catch (ResponseStatusException e) {
-      throw e;
+      return count != null && count > MAX_REQUESTS;
     } catch (Exception redisDown) {
       Bucket b = memory.computeIfAbsent(key, k -> new Bucket());
       synchronized (b) {
@@ -68,12 +76,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
           b.count = 0;
           b.resetAt = now + WINDOW.toMillis();
         }
-        if (++b.count > MAX_REQUESTS) {
-          throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many requests, try again later");
-        }
+        return ++b.count > MAX_REQUESTS;
       }
     }
-    chain.doFilter(req, res);
   }
 
   private static final class Bucket {
