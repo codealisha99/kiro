@@ -41,10 +41,14 @@ export function ProjectList({ projects, teamNames, selectedId, unread, offset, l
         {unread > 0 && <Badge tone="info">{unread} new</Badge>}
       </button>
       <Field label="Search projects">{(f) => <Input {...f} type="search" value={query} onChange={(e) => setQuery(e.target.value)} />}</Field>
-      <form className="work-create" onSubmit={(e) => void create(e)}>
-        <Field label="New project name">{(f) => <Input {...f} required maxLength={200} value={name} disabled={busy} onChange={(e) => setName(e.target.value)} />}</Field>
-        <Button type="submit" size="small" disabled={busy || !name.trim()}>Create project</Button>
-      </form>
+      {/* Creating is occasional, so it stays folded and the list keeps the space. */}
+      <details className="work-create">
+        <summary>New project</summary>
+        <form onSubmit={(e) => void create(e)}>
+          <Field label="Project name">{(f) => <Input {...f} required maxLength={200} value={name} disabled={busy} onChange={(e) => setName(e.target.value)} />}</Field>
+          <Button type="submit" size="small" disabled={busy || !name.trim()}>Create project</Button>
+        </form>
+      </details>
       {!loading && !projects.length && <p className="work-muted">No projects on this page. Create one or ask its owner for access.</p>}
       {!loading && projects.length > 0 && !visible.length && <p className="work-muted">No projects match “{query.trim()}” on this page.</p>}
       <div data-nav-scope="projects">

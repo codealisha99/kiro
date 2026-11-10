@@ -138,7 +138,7 @@ export default function WorkDashboard() {
     <section className="work-screen shell-page" aria-busy={page.busy}>
       {selectedId === null && (
         <PageHeader
-          eyebrow="Organizational intelligence"
+          eyebrow="Work"
           title="Projects & tasks"
           subtitle="Recorded work, emerging risks, and the evidence behind them."
           meta={overview && <><span>{overview.scope}</span><span>Calculated {new Date(overview.calculatedAt).toLocaleString()}</span></>}

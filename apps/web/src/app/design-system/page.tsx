@@ -180,8 +180,9 @@ export default function DesignSystemPage() {
               belong to metadata.
             </p>
             <p>
-              <strong>Quiet motion</strong>120–180ms feedback. Reduced motion is
-              respected.
+              <strong>Quiet motion</strong>120–180ms control feedback, 260ms for
+              state changes and view entrances, 520ms for content entering the page.
+              Motion explains a change; it never delays one. Reduced motion turns it off.
             </p>
           </div>
         </section>
@@ -444,14 +445,13 @@ export default function DesignSystemPage() {
             <Card>
               <h3>Goal progress</h3>
               <p className="muted">Progress against the expected marker, with health and distance stated in text.</p>
-              <ul className="home-goal-list">
-                <li>
-                  <GoalRow
-                    goal={goalPreview}
-                    parentTitle="Grow qualified pipeline"
-                    onOpen={() => undefined}
-                  />
-                </li>
+              {/* Same markup as Home: GoalRow renders its own <li>. */}
+              <ul className="goal-list is-compact">
+                <GoalRow
+                  goal={goalPreview}
+                  parentTitle="Grow qualified pipeline"
+                  onOpen={() => undefined}
+                />
               </ul>
             </Card>
           </div>

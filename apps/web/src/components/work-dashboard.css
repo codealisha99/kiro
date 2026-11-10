@@ -1,7 +1,8 @@
 /* Projects & tasks screen. Composition only; controls come from components/ui. Tokens only, no raw colors. */
 .work-screen { display: grid; gap: var(--space-4); min-width: 0; }
 .work-screen h2, .work-screen h3, .work-screen h4 { font-family: var(--font-editorial); font-weight: 400; overflow-wrap: anywhere; margin: 0; }
-.work-screen p { color: var(--color-muted); overflow-wrap: anywhere; margin: var(--space-2) 0 0; }
+/* Chart-kit tiles own their own type; this rule is for the screen's prose. */
+.work-screen p:not(.stat-tile p) { color: var(--color-muted); overflow-wrap: anywhere; margin: var(--space-2) 0 0; }
 .work-screen .work-plain-list p { margin-top: var(--space-1); }
 .work-muted { color: var(--color-muted); }
 .work-danger { color: var(--color-danger); }
@@ -26,7 +27,26 @@
 .work-workspace-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; min-height: var(--density-row); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
 .work-workspace-item:hover { background: var(--color-surface); }
 .work-workspace-item[aria-current="true"], .work-project-row.is-selected { background: var(--color-accent-soft); }
-.work-create { display: grid; gap: var(--space-2); }
+.work-create > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: fit-content;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  list-style: none;
+  transition: border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.work-create > summary::-webkit-details-marker { display: none; }
+.work-create > summary::before { content: "+"; color: var(--color-accent); font-weight: 600; }
+.work-create[open] > summary::before { content: "\2212"; }
+.work-create > summary:hover { border-color: var(--color-muted); }
+.work-create > summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.work-create > form { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .work-project-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
 .work-project-row { display: grid; gap: var(--space-1); width: 100%; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
 .work-project-row:hover { background: var(--color-surface); }
@@ -39,7 +59,7 @@
 .work-meter > span { display: block; height: 100%; background: var(--color-accent); }
 
 /* Metrics and charts */
-.work-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.work-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .work-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .work-chart-grid > * { min-width: 0; }
 
