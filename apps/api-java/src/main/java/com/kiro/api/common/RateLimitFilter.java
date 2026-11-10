@@ -16,13 +16,17 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 30 requests / 60s per user-or-IP on sensitive endpoints (mirrors ThrottleGuard:
- * key = handler + (userId or ip)). Redis-backed with in-memory fallback.
+ * key = handler + (userId or ip)). Redis-backed with in-memory fallback. Login and registration are
+ * keyed by client IP, which bounds password guessing per address; it does not stop an attacker who
+ * rotates addresses (a per-account limit would, at the cost of letting anyone lock a user out).
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
   static final int MAX_REQUESTS = 30;
   static final Duration WINDOW = Duration.ofMinutes(1);
+  static final java.util.Set<String> SENSITIVE_POSTS =
+      java.util.Set.of("/brain/query", "/documents/upload", "/auth/login", "/auth/register");
 
   private final StringRedisTemplate redis;
   private final ConcurrentHashMap<String, Bucket> memory = new ConcurrentHashMap<>();
@@ -35,9 +39,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
   protected boolean shouldNotFilter(HttpServletRequest req) {
     String uri = req.getRequestURI();
     String method = req.getMethod();
-    boolean sensitive =
-        ("POST".equals(method) && "/brain/query".equals(uri))
-            || ("POST".equals(method) && "/documents/upload".equals(uri));
+    boolean sensitive = "POST".equals(method) && SENSITIVE_POSTS.contains(uri);
     return !sensitive;
   }
 
