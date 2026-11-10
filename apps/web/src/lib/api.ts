@@ -1,3 +1,4 @@
+import type { AuditEvent } from "./admin-view";
 import type {
   AuthResponse,
   BrainQueryRequest,
@@ -244,6 +245,15 @@ export const api = {
       feedback: { helpful: boolean; _count: number }[];
       recentErrors: unknown[];
     }>("/admin/metrics"),
+  adminAudit: (limit = 200) => request<AuditEvent[]>(`/admin/audit?limit=${limit}`),
+  adminIngestion: () =>
+    request<{
+      sources: number;
+      documents: number;
+      chunks: number;
+      embeddedChunks: number;
+      failed: { versionId: string; error: string }[];
+    }>("/admin/ingestion"),
   evalRetrieval: () =>
     request<{
       total: number;
