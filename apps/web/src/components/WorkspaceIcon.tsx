@@ -19,6 +19,17 @@ import {
   Shield01Icon,
   Settings01Icon,
   Home01Icon,
+  Target01Icon,
+  Folder01Icon,
+  DashboardSquare01Icon,
+  Sun01Icon,
+  Moon02Icon,
+  ComputerIcon,
+  SidebarLeftIcon,
+  UnfoldMoreIcon,
+  KeyboardIcon,
+  CommandIcon,
+  Plug01Icon,
 } from "@hugeicons/core-free-icons";
 
 const icons = {
@@ -40,6 +51,17 @@ const icons = {
   shield: Shield01Icon,
   settings: Settings01Icon,
   home: Home01Icon,
+  target: Target01Icon,
+  folder: Folder01Icon,
+  dashboard: DashboardSquare01Icon,
+  sun: Sun01Icon,
+  moon: Moon02Icon,
+  computer: ComputerIcon,
+  sidebar: SidebarLeftIcon,
+  chevronsUpDown: UnfoldMoreIcon,
+  keyboard: KeyboardIcon,
+  command: CommandIcon,
+  plug: Plug01Icon,
 };
 export type IconName = keyof typeof icons;
 

@@ -17,8 +17,12 @@ import {
   Textarea,
 } from "@/components/ui";
 import { GoalRow } from "@/components/GoalRow";
+import { ShellSection } from "./shell-section";
+import { ChartGallery, ThemeComparison } from "./chart-section";
 import type { Goal } from "@/lib/home-api";
 import "../../components/home-dashboard.css";
+import "../../components/workspace.css";
+import "../../components/shell/shell.css";
 import "./design-system.css";
 
 // Static example goal for the shared goal progress row; values are illustrative.
@@ -53,7 +57,7 @@ const goalPreview: Goal = {
   version: 1,
 };
 
-const sections = ["Foundations", "Typography", "Components", "In context"];
+const sections = ["Foundations", "Typography", "Components", "Shell", "Charts", "In context"];
 const colors = [
   ["Canvas", "--color-canvas", "#e3e7df", "#14201e"],
   ["Paper", "--color-surface", "#f2f4ee", "#1c2b28"],
@@ -453,10 +457,40 @@ export default function DesignSystemPage() {
           </div>
         </section>
 
+        <section className="system-section" id="shell" aria-labelledby="shell-title">
+          <div className="system-section-heading">
+            <div>
+              <p className="section-label">04 / Shell</p>
+              <h2 id="shell-title">Quiet chrome, fast keys.</h2>
+            </div>
+            <p>
+              Navigation, page headers, and search
+              <br />
+              that stay out of the way.
+            </p>
+          </div>
+          <ShellSection />
+        </section>
+        <section className="system-section" id="charts" aria-labelledby="charts-title">
+          <div className="system-section-heading">
+            <div>
+              <p className="section-label">05 / Charts</p>
+              <h2 id="charts-title">Data, drawn in the palette.</h2>
+            </div>
+            <p>
+              Every chart has a table view
+              <br />
+              and works in both themes.
+            </p>
+          </div>
+          <ChartGallery />
+          <h3 className="chart-subhead">Both themes, side by side</h3>
+          <ThemeComparison />
+        </section>
         <section className="system-section" id="in-context">
           <div className="system-section-heading">
             <div>
-              <p className="section-label">04 / In context</p>
+              <p className="section-label">06 / In context</p>
               <h2>The answer and its evidence.</h2>
             </div>
             <Badge tone="info">Example content</Badge>

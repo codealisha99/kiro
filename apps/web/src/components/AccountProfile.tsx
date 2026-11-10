@@ -7,16 +7,20 @@ import type { UserDto } from "@kiro/shared";
 import { Alert, Button, Dialog, StatefulButton } from "@/components/ui";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 
+// Controlled profile dialog, opened from the workspace menu.
 export function AccountProfile({
   user,
+  open,
+  onClose,
   onLogout,
 }: {
   user: UserDto;
+  open: boolean;
+  onClose: () => void;
   onLogout: () => Promise<void>;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const name = user.name?.trim() || user.email.split("@")[0];
@@ -46,27 +50,12 @@ export function AccountProfile({
 
   return (
     <>
-      <div className="workspace-account">
-        <button
-          className="account-trigger"
-          onClick={() => setOpen(true)}
-          aria-haspopup="dialog"
-          aria-label="Open your profile"
-        >
-          <span className="account-avatar">{initials}</span>
-          <span className="account-summary">
-            <strong>{name}</strong>
-            <span>{role}</span>
-          </span>
-          <WorkspaceIcon name="settings" />
-        </button>
-      </div>
-      {mounted &&
+            {mounted &&
         createPortal(
           <Dialog
             open={open}
             onClose={() => {
-              if (!leaving) setOpen(false);
+              if (!leaving) onClose();
             }}
             title="Your account"
             className="account-dialog"
@@ -132,7 +121,7 @@ export function AccountProfile({
               <Button
                 variant="primary"
                 disabled={leaving}
-                onClick={() => setOpen(false)}
+                onClick={onClose}
               >
                 Done
               </Button>

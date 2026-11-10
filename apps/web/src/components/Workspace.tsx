@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  BrainQueryResponse,
   CitationSource,
   ConversationDto,
   DocumentDetail,
@@ -12,14 +10,7 @@ import type {
   SourceDto,
   UserDto,
 } from "@kiro/shared";
-import {
-  Alert,
-  Button,
-  Dialog,
-  Input,
-  StatefulButton,
-  Textarea,
-} from "@/components/ui";
+import { Alert, Button, Dialog } from "@/components/ui";
 import {
   api,
   ApiError,
@@ -27,44 +18,45 @@ import {
   getToken,
   SESSION_EXPIRED_EVENT,
 } from "@/lib/api";
+import { useThemePreference } from "./shell/use-theme";
+import { useShortcuts } from "./shell/use-shortcuts";
+import { useDrawer } from "./shell/use-drawer";
+import { AppSidebar } from "./shell/AppSidebar";
+import { TopBar } from "./shell/TopBar";
+import { CommandPalette } from "./shell/CommandPalette";
+import { KeyboardHelp } from "./shell/KeyboardHelp";
+import { buildPaletteEntries } from "./shell/palette-entries";
+import {
+  searchForView,
+  viewFromSearch,
+  VIEW_LABELS,
+  type WorkspaceView,
+} from "./shell/nav";
 import { AccountProfile } from "./AccountProfile";
 import AuthScreen from "./AuthScreen";
+import { AskView, type ChatMessage } from "./AskView";
 import DocumentEditor from "./DocumentEditor";
 import type { DocumentEditorHandle } from "./DocumentEditor";
 import DocumentActions from "./DocumentActions";
 import EvidencePanel from "./EvidencePanel";
+import GoalsPage from "./GoalsPage";
 import KnowledgeLibrary from "./KnowledgeLibrary";
 import HomeDashboard from "./HomeDashboard";
 import WorkDashboard from "./WorkDashboard";
 import OrganizationWorkspace from "./OrganizationWorkspace";
 import { KiroMark, WorkspaceIcon } from "./WorkspaceIcon";
 import "./workspace.css";
+import "./shell/shell.css";
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  status?: BrainQueryResponse["status"];
-  response?: BrainQueryResponse;
+const SIDEBAR_STORAGE_KEY = "kiro-sidebar";
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "collapsed";
+  } catch {
+    return false;
+  }
 }
-
-const PROMPTS = [
-  {
-    label: "Understand a policy",
-    query: "What is our refund policy?",
-    icon: "book" as const,
-  },
-  {
-    label: "Find a process",
-    query: "How do we onboard a new supplier?",
-    icon: "search" as const,
-  },
-  {
-    label: "Catch up on everything",
-    query: "What's happening?",
-    icon: "message" as const,
-  },
-];
 
 export default function Workspace({
   initialAuthMode = "login",
@@ -73,6 +65,7 @@ export default function Workspace({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [libraryAddRequest, setLibraryAddRequest] = useState(0);
+  const [goalCreateRequest, setGoalCreateRequest] = useState(0);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -85,12 +78,15 @@ export default function Workspace({
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
-  const [conversationSearch, setConversationSearch] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"home" | "ask" | "library" | "work" | "organization">("home");
+  const [view, setView] = useState<WorkspaceView>("home");
   const [railOpen, setRailOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingDocument, setEditingDocument] = useState(false);
   const [documentBusy, setDocumentBusy] = useState(false);
@@ -109,6 +105,7 @@ export default function Workspace({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const activeDocumentId = useRef<string | null>(null);
   const documentRequestRef = useRef(0);
+  const { preference, resolved, setPreference } = useThemePreference();
 
   const load = useCallback(async () => {
     const session = getToken();
@@ -138,10 +135,29 @@ export default function Workspace({
     }
   }, []);
 
+  // Moves the view and records it in the URL so views can be shared and the back button works.
+  const navigate = useCallback((next: WorkspaceView) => {
+    // "New goal" and "Add document" are one-shot requests: leaving the page drops them, so a
+    // later visit through the sidebar or a shortcut does not reopen the dialog.
+    if (next !== "goals") setGoalCreateRequest(0);
+    if (next !== "library") setLibraryAddRequest(0);
+    setView(next);
+    setRailOpen(false);
+    window.history.pushState(
+      null,
+      "",
+      `${window.location.pathname}${searchForView(window.location.search, next)}`,
+    );
+  }, []);
+
   useEffect(() => {
     setAuthed(!!getToken());
     setReady(true);
-    if (new URLSearchParams(window.location.search).get("integration") === "xero") setView("organization");
+    const initial = viewFromSearch(window.location.search);
+    if (initial) setView(initial);
+    const onPop = () => setView(viewFromSearch(window.location.search) ?? "home");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
   useEffect(() => {
     const expire = () => {
@@ -164,7 +180,6 @@ export default function Workspace({
       setRailOpen(false);
       setFeedback({});
       setInput("");
-      setConversationSearch("");
       setSuccess(null);
       setNotice(null);
       setView("ask");
@@ -197,44 +212,29 @@ export default function Workspace({
       textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
     }
   }, [input]);
-
   useEffect(() => {
-    if (!railOpen || !railRef.current) return;
-    const panel = railRef.current;
-    const previous = document.activeElement as HTMLElement | null;
-    const controls = () =>
-      Array.from(
-        panel.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled)"),
-      ).filter((element) => element.getClientRects().length > 0);
-    controls()[0]?.focus();
-    const handleKey = (event: KeyboardEvent) => {
-      // A native modal owns keyboard focus until it closes.
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? "collapsed" : "expanded");
+    } catch {
+      /* The sidebar state still applies for this visit. */
+    }
+  }, [sidebarCollapsed]);
+
+  useDrawer(railOpen, railRef, () => setRailOpen(false));
+  const shortcutsEnabled = authed && loaded;
+  useShortcuts({ enabled: shortcutsEnabled, onNavigate: navigate, onOpenHelp: () => setHelpOpen(true) });
+  useEffect(() => {
+    if (!shortcutsEnabled) return;
+    const onCommandKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      // A modal dialog makes the page inert; opening the palette behind it would trap focus nowhere.
       if (document.querySelector("dialog[open]")) return;
-      if (event.key === "Escape") setRailOpen(false);
-      if (event.key !== "Tab") return;
-      const items = controls();
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
+      event.preventDefault();
+      setPaletteOpen((open) => !open);
     };
-    const media = window.matchMedia("(min-width: 761px)");
-    const closeOnDesktop = () => {
-      if (media.matches) setRailOpen(false);
-    };
-    media.addEventListener("change", closeOnDesktop);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      media.removeEventListener("change", closeOnDesktop);
-      document.removeEventListener("keydown", handleKey);
-      if (previous?.isConnected) previous.focus();
-    };
-  }, [railOpen]);
+    document.addEventListener("keydown", onCommandKey);
+    return () => document.removeEventListener("keydown", onCommandKey);
+  }, [shortcutsEnabled]);
 
   const openDocument = useCallback(
     async (id: string, cite?: CitationSource, version = cite?.version) => {
@@ -269,7 +269,7 @@ export default function Workspace({
       const question = (text ?? input).trim();
       if (!question || busy) return;
       const session = getToken();
-      setView("ask");
+      navigate("ask");
       setNotice(null);
       setMessages((prev) => [
         ...prev,
@@ -316,7 +316,7 @@ export default function Workspace({
         setBusy(false);
       }
     },
-    [input, busy, activeConversationId, load],
+    [input, busy, activeConversationId, load, navigate],
   );
 
   async function openConversation(id: string) {
@@ -348,8 +348,7 @@ export default function Workspace({
           },
         ]),
       );
-      setView("ask");
-      setRailOpen(false);
+      navigate("ask");
     } catch {
       if (getToken() !== session) return;
       setNotice("This conversation could not be opened. Please try again.");
@@ -364,19 +363,20 @@ export default function Workspace({
     setMessages([]);
     setInput("");
     setNotice(null);
-    setView("ask");
-    setRailOpen(false);
+    navigate("ask");
     requestAnimationFrame(() => composerRef.current?.focus());
   }
   function addKnowledge() {
     setLibraryAddRequest((request) => request + 1);
-    setView("library");
-    setRailOpen(false);
+    navigate("library");
   }
   function showLibrary() {
     setLibraryAddRequest(0);
-    setView("library");
-    setRailOpen(false);
+    navigate("library");
+  }
+  function newGoal() {
+    setGoalCreateRequest((request) => request + 1);
+    navigate("goals");
   }
   async function logout() {
     try {
@@ -388,17 +388,18 @@ export default function Workspace({
     setAuthed(false);
     setSessionExpired(false);
     setLibraryAddRequest(0);
+    setGoalCreateRequest(0);
     setUser(null);
     setLoaded(false);
     setMessages([]);
     setActiveConversationId(null);
     setRailOpen(false);
+    setProfileOpen(false);
     setDocumentOpen(false);
     setEditingDocument(false);
     setDocumentBusy(false);
     setNotice(null);
     setSuccess(null);
-    setConversationSearch("");
     documentRequestRef.current += 1;
     setOpenDoc(null);
     setActiveCite(null);
@@ -428,6 +429,17 @@ export default function Workspace({
     }
   }
 
+  const paletteEntries = buildPaletteEntries(conversations, {
+        navigate,
+        newQuestion: newChat,
+        newGoal,
+        openConversation: (id) => void openConversation(id),
+        toggleTheme: () => setPreference(resolved === "dark" ? "light" : "dark"),
+        setTheme: setPreference,
+        openShortcuts: () => setHelpOpen(true),
+        toggleSidebar: () => setSidebarCollapsed((value) => !value),
+  });
+
   if (!ready) return null;
   if (!authed)
     return (
@@ -440,22 +452,24 @@ export default function Workspace({
         }}
       />
     );
-  const empty = messages.length === 0;
   const recentDocuments = [...documents]
     .sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     )
     .slice(0, 3);
-  const matchingConversations = conversations.filter((conversation) =>
-    (conversation.title ?? "Untitled question").toLowerCase().includes(conversationSearch.trim().toLowerCase()),
-  );
   const currentTitle = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   )?.title;
+  const crumbs =
+    view === "ask" && currentTitle
+      ? ["Workspace", VIEW_LABELS.ask, currentTitle]
+      : ["Workspace", VIEW_LABELS[view]];
 
   return (
-    <div className={`workspace ${railOpen ? "navigation-open" : ""}`}>
+    <div
+      className={`workspace ${railOpen ? "navigation-open" : ""} ${sidebarCollapsed ? "is-collapsed" : ""}`}
+    >
       <a className="skip-link" href="#workspace-content">
         Skip to knowledge desk
       </a>
@@ -467,121 +481,28 @@ export default function Workspace({
           onClick={() => setRailOpen(false)}
         />
       )}
-      <aside
-        className="workspace-sidebar"
-        ref={railRef}
-        id="workspace-navigation"
-        aria-label="Workspace navigation"
-      >
-        <div className="workspace-brand">
-          <span className="workspace-mark">
-            <KiroMark />
-          </span>
-          <Link href="/" className="workspace-home" aria-label="Kiro home">
-            kiro
-          </Link>
-          <Button
-            className="workspace-mobile icon-button"
-            variant="secondary"
-            aria-label="Close navigation"
-            onClick={() => setRailOpen(false)}
-          >
-            <WorkspaceIcon name="close" />
-          </Button>
-        </div>
-        <p className="workspace-label">Your knowledge desk</p>
-        <nav className="workspace-nav" aria-label="Main">
-          <button
-            className={`nav-item ${view === "home" ? "selected" : ""}`}
-            aria-current={view === "home" ? "page" : undefined}
-            onClick={() => {
-              setView("home");
-              setRailOpen(false);
-            }}
-          >
-            <WorkspaceIcon name="home" />
-            Home
-          </button>
-          <Button
-            variant="secondary"
-            className="new-question"
-            onClick={newChat}
-            disabled={busy}
-          >
-            <WorkspaceIcon name="plus" />
-            New question
-          </Button>
-          <button
-            className={`nav-item ${view === "ask" ? "selected" : ""}`}
-            aria-current={view === "ask" ? "page" : undefined}
-            onClick={() => {
-              setView("ask");
-              setRailOpen(false);
-            }}
-          >
-            <WorkspaceIcon name="message" />
-            Ask Kiro
-          </button>
-          <button
-            className={`nav-item ${view === "library" ? "selected" : ""}`}
-            aria-current={view === "library" ? "page" : undefined}
-            onClick={showLibrary}
-          >
-            <WorkspaceIcon name="book" />
-            Library<span className="nav-count">{documents.length || ""}</span>
-          </button>
-          <button className={`nav-item ${view === "work" ? "selected" : ""}`}
-            aria-current={view === "work" ? "page" : undefined}
-            onClick={() => { setView("work"); setRailOpen(false); }}>
-            <WorkspaceIcon name="book" />Work &amp; insights
-          </button>
-          <button className={`nav-item ${view === "organization" ? "selected" : ""}`} aria-current={view === "organization" ? "page" : undefined} onClick={() => { setView("organization"); setRailOpen(false); }}>
-            <WorkspaceIcon name="book" /><span>Company dashboards</span>
-          </button>
-        </nav>
-        <div className="workspace-recents">
-          <h2>Recent conversations</h2>
-          {conversations.length > 0 && (
-            <div className="conversation-search">
-              <Input type="search" aria-label="Search conversations" placeholder="Find a conversation…" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} />
-            </div>
-          )}
-          {conversations.length > 0 && matchingConversations.length === 0 && (
-            <p role="status">No matching conversations. Try another search.</p>
-          )}
-          {conversations.length === 0 ? (
-            <p>A little clarity starts with a question.</p>
-          ) : (
-            matchingConversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                className={
-                  conversation.id === activeConversationId && view === "ask"
-                    ? "active"
-                    : ""
-                }
-                onClick={() => void openConversation(conversation.id)}
-                disabled={busy}
-                title={conversation.title ?? "Untitled question"}
-              >
-                <WorkspaceIcon name="message" />
-                <span>{conversation.title ?? "Untitled question"}</span>
-              </button>
-            ))
-          )}
-        </div>
-        {loaded && documents.length === 0 && (
-          <button className="sidebar-setup" onClick={addKnowledge}>
-            <WorkspaceIcon name="upload" />
-            <span>
-              <strong>Make this desk yours</strong>
-              <small>Add your first document</small>
-            </span>
-            <WorkspaceIcon name="chevron" />
-          </button>
-        )}
-        {user && <AccountProfile user={user} onLogout={logout} />}
-      </aside>
+      {user && (
+        <AppSidebar
+          asideRef={railRef}
+          view={view}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+          onNavigate={navigate}
+          onNewQuestion={newChat}
+          onAddDocument={addKnowledge}
+          busy={busy}
+          documentCount={documents.length}
+          showSetup={loaded && documents.length === 0}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onOpenConversation={(id) => void openConversation(id)}
+          user={user}
+          preference={preference}
+          onThemeChange={setPreference}
+          onProfile={() => setProfileOpen(true)}
+          onSignOut={() => void logout()}
+        />
+      )}
 
       <main
         id="workspace-content"
@@ -589,34 +510,12 @@ export default function Workspace({
         inert={railOpen || undefined}
         tabIndex={-1}
       >
-        <header className="workspace-header">
-          <div>
-            <Button
-              variant="secondary"
-              className="workspace-mobile icon-button"
-              aria-label="Open navigation"
-              aria-expanded={railOpen}
-              aria-controls="workspace-navigation"
-              onClick={() => setRailOpen(true)}
-            >
-              <WorkspaceIcon name="menu" />
-            </Button>
-            <span className="workspace-breadcrumb">
-              Workspace <span aria-hidden="true">/</span>
-            </span>
-            <span>
-              {view === "home" ? "Home" : view === "organization" ? "Company dashboards" : view === "work" ? "Work & insights" : view === "library"
-                ? "Knowledge library"
-                : currentTitle || "Ask Kiro"}
-            </span>
-          </div>
-          <button className="workspace-library-link" onClick={showLibrary}>
-            <WorkspaceIcon name="book" />
-            <span>
-              {documents.length} document{documents.length === 1 ? "" : "s"}
-            </span>
-          </button>
-        </header>
+        <TopBar
+          crumbs={crumbs}
+          navExpanded={railOpen}
+          onOpenNavigation={() => setRailOpen(true)}
+          onOpenPalette={() => setPaletteOpen(true)}
+        />
         {success && (
           <div className="workspace-notice">
             <Alert tone="success">{success}<Button variant="secondary" size="small" onClick={() => setSuccess(null)}>Dismiss</Button></Alert>
@@ -650,7 +549,15 @@ export default function Workspace({
               </Button>
             )}
           </div>
-        ) : view === "home" ? <HomeDashboard key={user?.id} /> : view === "organization" ? <OrganizationWorkspace key={user?.id} /> : view === "work" ? <WorkDashboard key={user?.id} /> : view === "library" ? (
+        ) : view === "home" ? (
+          <HomeDashboard key={user?.id} />
+        ) : view === "organization" ? (
+          <OrganizationWorkspace key={user?.id} />
+        ) : view === "work" ? (
+          <WorkDashboard key={user?.id} />
+        ) : view === "goals" ? (
+          <GoalsPage createRequest={goalCreateRequest} />
+        ) : view === "library" ? (
           <KnowledgeLibrary
             documents={documents}
             sources={sources}
@@ -660,287 +567,41 @@ export default function Workspace({
             addRequest={libraryAddRequest}
           />
         ) : (
-          <div
-            className={`question-view ${empty ? "is-empty" : "has-messages"}`}
-          >
-            {empty ? (
-              <div className="question-welcome">
-                <span className="welcome-eyebrow">
-                  <span className="welcome-emblem">
-                    <KiroMark />
-                  </span>
-                  {user?.name
-                    ? `Welcome, ${user.name.split(" ")[0]}`
-                    : "Your company knowledge, within reach"}
-                </span>
-                <h1>
-                  {loaded && !documents.length ? (
-                    <>
-                      Give your knowledge
-                      <br />a place to work.
-                    </>
-                  ) : (
-                    <>
-                      Your next answer
-                      <br />
-                      starts here.
-                    </>
-                  )}
-                </h1>
-                <p>
-                  {loaded && !documents.length
-                    ? "Start with a handbook, a process guide, or a few useful notes."
-                    : "Ask a question. Follow the evidence. Get on with your day."}
-                </p>
-                {loaded && !documents.length && (
-                  <div className="welcome-setup">
-                    <Button variant="primary" onClick={addKnowledge}>
-                      <WorkspaceIcon name="plus" />
-                      Add your first document
-                    </Button>
-                    <Button variant="secondary" onClick={showLibrary}>
-                      Explore with samples
-                    </Button>
-                    <span>
-                      PDF, Word, spreadsheets, Markdown, or plain text.
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="conversation-scroll">
-                <div className="conversation-content">
-                  {messages.map((message, index) => (
-                    <article
-                      className={`conversation-message ${message.role} ${message.status === "error" ? "has-error" : ""}`}
-                      key={message.id}
-                    >
-                      {message.role === "user" ? (
-                        <h2>{message.content}</h2>
-                      ) : message.status === "error" ? (
-                        <div className="answer-error" role="alert">
-                          <span className="answer-label">Unable to answer</span>
-                          <p>{message.content}</p>
-                          <div>
-                            <button
-                              onClick={() =>
-                                void send(messages[index - 1]?.content)
-                              }
-                              disabled={busy}
-                            >
-                              Try again
-                            </button>
-                            <button onClick={showLibrary}>
-                              Browse library
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="answer-byline">
-                            <KiroMark />
-                            <span>Kiro</span>
-                            {message.status &&
-                              message.status !== "answered" && (
-                                <span className="answer-status">
-                                  {message.status === "unknown"
-                                    ? "No matching answer"
-                                    : message.status === "partial"
-                                      ? "Partial answer"
-                                      : "Sources differ"}
-                                </span>
-                              )}
-                          </div>
-                          <div className="answer">
-                            {renderAnswer(
-                              message.content,
-                              message.response?.sources,
-                              (cite) =>
-                                void openDocument(cite.documentId, cite),
-                            )}
-                          </div>
-                          {!!message.response?.sources.length && (
-                            <div className="answer-source-group">
-                              <p className="answer-source-label">
-                                Supporting sources
-                              </p>
-                              <div className="answer-sources">
-                                {message.response.sources.map((source, i) => (
-                                  <button
-                                    key={`${source.documentId}-${i}`}
-                                    onClick={() =>
-                                      void openDocument(
-                                        source.documentId,
-                                        source,
-                                      )
-                                    }
-                                  >
-                                    <span>{source.citationIndex ?? i + 1}</span>
-                                    {source.title}
-                                    <WorkspaceIcon
-                                      name="chevron"
-                                      width="12"
-                                      height="12"
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {message.response && (
-                            <div className="answer-feedback">
-                              {feedback[message.id] === "saved" ? (
-                                <span role="status">
-                                  Thanks for your feedback.
-                                </span>
-                              ) : (
-                                <>
-                                  <span>Was this helpful?</span>
-                                  <button
-                                    disabled={!!feedback[message.id]}
-                                    onClick={() => void rate(message.id, true)}
-                                  >
-                                    Yes
-                                  </button>
-                                  <button
-                                    disabled={!!feedback[message.id]}
-                                    onClick={() => void rate(message.id, false)}
-                                  >
-                                    No
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </article>
-                  ))}
-                  {busy && (
-                    <p className="answer-loading" role="status">
-                      <span className="status-dot" />
-                      Finding the right sources…
-                    </p>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-              </div>
-            )}
-            {(!empty || documents.length > 0) && (
-              <div className="question-entry">
-                <form
-                  className="question-composer"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void send();
-                  }}
-                >
-                  <Textarea
-                    ref={composerRef}
-                    aria-label="Ask a question"
-                    placeholder={
-                      empty
-                        ? "Ask anything about your company…"
-                        : "Ask a follow-up question…"
-                    }
-                    rows={2}
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" &&
-                        !event.shiftKey &&
-                        !event.nativeEvent.isComposing
-                      ) {
-                        event.preventDefault();
-                        void send();
-                      }
-                    }}
-                    disabled={busy}
-                  />
-                  <div className="composer-toolbar">
-                    <span>
-                      <WorkspaceIcon name="lock" width="13" height="13" />
-                      {documents.length} document
-                      {documents.length === 1 ? "" : "s"} in your library
-                    </span>
-                    <span className="composer-shortcut">
-                      Enter to ask <kbd>↵</kbd>
-                    </span>
-                    <StatefulButton
-                      loading={busy}
-                      variant="primary"
-                      type="submit"
-                      className="send-question"
-                      aria-label={busy ? "Finding an answer" : "Send question"}
-                      disabled={busy || !input.trim()}
-                    >
-                      {!busy && (
-                        <WorkspaceIcon name="arrow" width="20" height="20" />
-                      )}
-                    </StatefulButton>
-                  </div>
-                </form>
-                {empty ? (
-                  <div className="question-suggestions">
-                    {PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt.label}
-                        onClick={() => {
-                          setInput(prompt.query);
-                          composerRef.current?.focus();
-                        }}
-                      >
-                        <WorkspaceIcon name={prompt.icon} />
-                        <span>
-                          <strong>{prompt.label}</strong>
-                          <small>{prompt.query}</small>
-                        </span>
-                        <WorkspaceIcon name="chevron" />
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="composer-note">
-                    Knowledge answers cite your sources. Ask “What is blocked on my team?” for a snapshot of work you can access.
-                  </p>
-                )}
-              </div>
-            )}
-            {empty && documents.length > 0 && (
-              <section
-                className="desk-documents"
-                aria-labelledby="desk-documents-title"
-              >
-                <div className="desk-documents-heading">
-                  <h2 id="desk-documents-title">From your library</h2>
-                  <button onClick={showLibrary}>
-                    View all <WorkspaceIcon name="chevron" />
-                  </button>
-                </div>
-                <div className="desk-document-list">
-                  {recentDocuments.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={() => void openDocument(doc.id)}
-                    >
-                      <WorkspaceIcon name="file" />
-                      <span>{doc.title}</span>
-                      <WorkspaceIcon name="chevron" />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-            {empty && (
-              <p className="welcome-footnote">
-                <WorkspaceIcon name="lock" width="12" height="12" />
-                Answers grounded in your team’s knowledge.
-              </p>
-            )}
-          </div>
+          <AskView
+            loaded={loaded}
+            user={user}
+            documents={documents}
+            recentDocuments={recentDocuments}
+            messages={messages}
+            busy={busy}
+            input={input}
+            onInputChange={setInput}
+            composerRef={composerRef}
+            chatEndRef={chatEndRef}
+            feedback={feedback}
+            send={send}
+            rate={rate}
+            openDocument={openDocument}
+            showLibrary={showLibrary}
+            addKnowledge={addKnowledge}
+          />
         )}
       </main>
+      <CommandPalette
+        open={paletteOpen}
+        entries={paletteEntries}
+        onClose={() => setPaletteOpen(false)}
+        onAsk={(text) => void send(text)}
+      />
+      <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {user && (
+        <AccountProfile
+          user={user}
+          open={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          onLogout={logout}
+        />
+      )}
       <Dialog
         open={documentOpen}
         closeDisabled={documentBusy}
@@ -991,7 +652,7 @@ export default function Workspace({
               setDocumentOpen(false);
               setMessages([]);
               setActiveConversationId(null);
-              setView("library");
+              navigate("library");
               setSuccess("Document removed from the workspace library.");
               void load();
             }} />
@@ -1001,27 +662,4 @@ export default function Workspace({
       </Dialog>
     </div>
   );
-}
-
-function renderAnswer(
-  text: string,
-  sources: CitationSource[] | undefined,
-  onCite: (source: CitationSource) => void,
-) {
-  return text.split(/(\[\d+\])/g).map((part, index) => {
-    const match = part.match(/^\[(\d+)\]$/);
-    const source = match ? sources?.find((source, index) => (source.citationIndex ?? index + 1) === Number(match[1])) : undefined;
-    return source ? (
-      <button
-        key={index}
-        className="cite-chip"
-        aria-label={`Open source ${match![1]}: ${source.title}`}
-        onClick={() => onCite(source)}
-      >
-        {match![1]}
-      </button>
-    ) : (
-      <span key={index}>{part}</span>
-    );
-  });
 }

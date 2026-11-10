@@ -167,3 +167,116 @@ Authorized document edits use a focused text form within the source dialog. Keep
 ## Home dashboard and goals — 2026-11-10
 
 Home is the default view and opens with a greeting, the person's scope label, and compact scope numbers that state their calculation beside them. Goals follow the order company, department, team, personal; empty groups are hidden. Each goal row pairs its progress bar with an "expected by today" marker, the percentage as text, a health label (On track, At risk, Off track, Achieved, No data, Cancelled), the distance to target, and the due date. Goals the viewer owns are marked "Yours" and carry an accent edge. Overdue tasks use the danger token together with the word "Overdue". Goal dialogs and the new-goal form use labeled native fields, inline validation, and server messages beside the action. The goal progress row is shown in `/design-system`.
+
+## App shell, density, and chart kit — 2026-11-10
+
+Keep Kiro's palette, fonts, and token system. Borrow Linear and Notion structure only: a quiet sidebar, 1px hairlines, a compact top bar, keyboard-first navigation, and calm empty states. Build screens from the pieces below; do not re-create chrome.
+
+### Shell layout
+
+- `components/Workspace.tsx` owns data loading, conversations, documents, and routing. It composes `components/shell/*`.
+- Views: `home`, `ask`, `library`, `goals`, `work`, `organization` (`components/shell/nav.ts`). The active view is in `?view=` and changes push history. `?integration=xero` still opens `organization`.
+- Sidebar (232px desktop, collapsible to 56px icons, remembered in `localStorage` `kiro-sidebar`; a drawer below 760px): workspace menu (profile, theme, sign out), New question, Home / Ask Kiro / Library, **Work** (Projects & tasks, Goals), **Organization** (Company dashboards, which also holds the explorer and connected applications tabs), then recent conversations.
+- Top bar (48px): breadcrumbs, and the search / ⌘K trigger. On mobile the navigation drawer opens from the menu button.
+- Density tokens in `tokens.css`: `--density-row` 36px, `--density-row-compact` 32px, `--shell-sidebar`, `--shell-sidebar-collapsed`, `--shell-topbar`. Prefer compact rows for lists and tables; keep 16–24px inside panels.
+- Page composition: wrap a screen in `.shell-page` (max width `--content-width`, gutter `--page-gutter`).
+
+### Page primitives (`@/components/ui`)
+
+```tsx
+<PageHeader
+  eyebrow="Planning"            // optional
+  title="Goals"                 // rendered as h1 with id "page-title" by default
+  subtitle="Targets for the company, teams, and people."
+  meta={<><span>12 goals</span></>}
+  actions={<Button variant="primary">New goal</Button>}
+  tabs={<PageTabs items={[{ id: "all", label: "All" }]} value={tab} onChange={setTab} label="Goal views" />}
+/>
+<Section title="Health" description="Counts from the goals you can see." actions={...}>
+  <Panel tone="raised">…</Panel>
+</Section>
+```
+
+`PageTabs` is a `tablist` with arrow-key navigation. `Section` labels its region with its heading. `Panel` is a bordered surface; `tone="raised"` is one step lighter. Shell-level components live in `components/shell/`.
+
+### Keyboard
+
+| Keys | Action |
+| --- | --- |
+| ⌘K / Ctrl K | Command palette (search, jump, ask, create, theme, recent conversations) |
+| `?` | Keyboard shortcuts dialog |
+| `g h` / `g a` / `g l` / `g w` / `g g` / `g o` | Home / Ask / Library / Work / Goals / Organization |
+
+Shortcuts never fire while typing in an input, textarea, select, or contenteditable element, while a modifier is held, or while a native dialog is open. `g` must be followed within 1.2 seconds.
+
+Palette behavior: Combobox and listbox pattern. Arrows move, Enter runs, Escape closes and returns focus to the trigger. "Ask Kiro: <text>" appears last when there are other matches.
+
+**New goal hook:** the palette and shortcuts call `setGoalCreateRequest` and navigate to goals. `GoalsPage` receives `createRequest` (a counter in `components/GoalsPage.tsx`). Open the create dialog in an effect whenever that value changes. Do not rely on mount order.
+
+### Theme
+
+Three choices in the workspace menu and the palette: light, dark, system. Stored in `localStorage` `kiro-theme`, defaulting to light (the established application theme). `app/layout.tsx` applies `data-theme` before first paint (`THEME_INIT_SCRIPT` in `lib/theme.ts`). Never style by inverting; define new colors as token pairs in both `:root` and `[data-theme="dark"]`.
+
+### Chart kit (`@/components/charts`)
+
+Methods follow the data-viz guidance: categorical colors fixed in order, one hue per ramp, status colors reserved for meaning, a visible legend for two or more series, and every chart with a "View as table" twin. Helpers live in `charts/scale.ts` (tested in `tests/chart-scale.test.mjs`).
+
+| Component | Props | Use for |
+| --- | --- | --- |
+| `StatTile` | `label`, `value` (pre-formatted string), `delta?: { change, text, good?: "up"\|"down"\|"neither" }`, `trend?`, `note?` | One headline number with a change |
+| `Sparkline` | `values: (number\|null)[]`, `label`, `width?`, `height?` | Inline trend in a row or tile |
+| `LineChart` | `title`, `series: { id, label, points: { x: epochMs, y }[] }[]` (1–4), `target?: { label, value }`, `description?`, `height?`, `yFormat?`, `valueFormat?`, `xFormat?`, `loading?`, `emptyText?`, `footer?` | Trends over time. Arrow keys and hover inspect values |
+| `BarChart` | `title`, `categories: string[]`, `series: { id, label, values: (number\|null)[] }[]` (1–4), `stacked?`, plus the same optional props | Comparisons by period, grouped or stacked |
+| `HBarChart` | `title`, `items: { id, label, value, detail? }[]`, `valueFormat?` | Rankings such as teams or people |
+| `StackedBar` | `title`, `segments: { id, label, value, tone? }[]` (`good`, `warning`, `danger`, `accent`, `neutral`) | One 100% distribution, such as goal health or task status. Legend shows counts and shares |
+| `ProgressBar` | `value` (0–1 or null), `expected?` (0–1), `label`, `valueText?`, `tone?` | Progress with an "expected by today" marker |
+| `ChartFrame` / `ChartDataTable` | `title`, `table`, `loading`, `empty`, `emptyText`, `footer`, `children` | Building new chart types with the same frame and table toggle |
+
+Formatters: `formatCompact` (axes), `formatNumber`, `formatPercent` (ratio in, string out), `formatDelta` (true minus sign). Date axes use UTC via `formatDayShort` / `formatDayLong`, so server and client render identically.
+
+Rules:
+- Pass numbers, not formatted strings, except `StatTile.value`.
+- Charts size to their container with `ResizeObserver`. Give a fixed `height` only to line and bar charts.
+- Use the tokens only; never pass raw hex.
+- Empty and loading states are built in. Pass `loading` or empty data rather than hiding the chart.
+- Bar series are limited to four. Beyond that, fold into "Other" or facet.
+
+Example:
+
+```tsx
+import { LineChart, StatTile, ProgressBar } from "@/components/charts";
+
+<StatTile label="Completed" value={formatNumber(42)} delta={{ change: 4, text: "+4 vs last week", good: "up" }} trend={weekly} />
+<LineChart title="Completed per day" series={[{ id: "done", label: "Completed", points }]} target={{ label: "Target", value: 6 }} />
+<ProgressBar value={0.52} expected={0.72} label="Revenue goal" valueText="52% complete. Expected 72% by today." />
+```
+
+### Validated palette
+
+Light surface `#fafbf7` (`--color-panel`); dark surface `#22332f` (`--color-panel`). Tokens: `--chart-1` … `--chart-8`, `--chart-seq-1` … `--chart-seq-5`.
+
+| Slot | Light | Dark |
+| --- | --- | --- |
+| 1 | `#007198` | `#00a4c0` |
+| 2 | `#c0571e` | `#db703b` |
+| 3 | `#00986c` | `#009d82` |
+| 4 | `#9f6800` | `#aa8722` |
+| 5 | `#b84379` | `#d36a96` |
+| 6 | `#296818` | `#58994a` |
+| 7 | `#6b4cae` | `#8d73d1` |
+| 8 | `#b02a2d` | `#d8625c` |
+
+Sequential (ordinal ramp, low to high): light `#87b3bf #529fb1 #0e899f #00738d #005b75`; dark `#2b6d7c #1b8fa5 #18b1cd #4cd1ee #9fecff`.
+
+Validator (`node /tmp/kiro-dataviz/scripts/validate_palette.js "<hex,...>" --mode light|dark --surface <hex>`), exit 0 in both modes:
+- Light: L band pass; chroma floor pass; CVD worst adjacent ΔE 8.9 (deutan, `#00986c` vs `#c0571e`), tritan 7.0; normal-vision worst ΔE 17.9; every slot ≥3:1 against `#fafbf7`. ALL CHECKS PASS.
+- Dark: L band pass (0.48–0.67); chroma pass; CVD worst adjacent ΔE 8.8 (`#58994a` vs `#d36a96`), tritan 7.8; normal-vision worst ΔE 16.3; every slot ≥3:1 against `#22332f`. ALL CHECKS PASS.
+- Sequential ramps, `--ordinal`: light passes all four checks (light end 2.19:1 against the surface); dark passes all four (light end 2.26:1).
+
+Status uses the existing semantic tokens `--color-success`, `--color-warning`, `--color-danger`, not categorical slots. Status never follows the series palette. Always pair status color with text (a legend or a label).
+
+Because the palette was derived from Kiro's hues, the validator measured it. Do not change a slot without rerunning both modes and updating this section.
+
+### Verification (2026-11-10)
+
+`typecheck`, `lint`, `test` (36 tests, including the scale math, theme, shell routing, and palette ranking), and `build` pass. Visual checks: desktop and 390px mobile, light and dark, the open palette, the shortcut dialog, the workspace menu, the collapsed sidebar, and `/design-system` (shell and charts sections in both themes).
