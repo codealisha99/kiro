@@ -4,14 +4,13 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Button, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Goal, GoalMeasure, GoalOptions, GoalScope, GoalStatus, NamedOption } from "@/lib/home-api";
 import { GOAL_DESCRIPTION_MAX, GOAL_TITLE_MAX, validateGoalValues, type GoalFormErrors, type GoalFormValues } from "@/lib/goal-draft";
-import { formatNumber, SCOPE_TITLES } from "@/lib/goal-format";
+import { formatNumber, MEASURE_NAMES, SCOPE_TITLES } from "@/lib/goal-format";
 
 const MEASURE_LABELS: Record<GoalMeasure, string> = {
   METRIC: "Metric: a number moving toward a target",
   TASKS: "Linked tasks: progress as tasks finish",
   CHILDREN: "Child goals: average progress of aligned goals",
 };
-const MEASURE_NAMES: Record<GoalMeasure, string> = { METRIC: "Metric", TASKS: "Linked tasks", CHILDREN: "Child goals" };
 const STATUS_LABELS: Record<GoalStatus, string> = { ACTIVE: "Active", ACHIEVED: "Achieved", CANCELLED: "Cancelled" };
 const STATUSES: GoalStatus[] = ["ACTIVE", "ACHIEVED", "CANCELLED"];
 

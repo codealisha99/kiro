@@ -125,10 +125,19 @@ export interface GoalUpdate extends GoalDraft {
 
 export interface GoalCheckinDraft { value: number | null; note: string }
 
+/** Weekly completions from the organization metrics endpoint, oldest week first. */
+export interface ThroughputResponse {
+  weeks: number;
+  weekly: { week_start: string; completed: number }[];
+  summary: { open_tasks: number; blocked: number; overdue: number; completed_window: number };
+  method: string;
+}
+
 const goalPath = (id: string) => `/goals/${encodeURIComponent(id)}`;
 
 export const homeApi = {
   home: () => request<HomeResponse>("/home"),
+  throughput: (weeks = 8) => request<ThroughputResponse>(`/organization/metrics?weeks=${weeks}`),
   goals: () => request<Goal[]>("/goals"),
   goalOptions: () => request<GoalOptions>("/goals/options"),
   goal: (id: string) => request<GoalDetail>(goalPath(id)),

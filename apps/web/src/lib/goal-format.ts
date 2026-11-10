@@ -1,5 +1,5 @@
 import type { DashboardView } from "./organization-api";
-import type { Goal, GoalHealth, GoalScope, TaskStatus } from "./home-api";
+import type { Goal, GoalHealth, GoalMeasure, GoalScope, TaskStatus } from "./home-api";
 
 export const SCOPE_ORDER: GoalScope[] = ["COMPANY", "DEPARTMENT", "TEAM", "PERSON"];
 export const SCOPE_TITLES: Record<GoalScope, string> = {
@@ -26,6 +26,8 @@ export const HEALTH_TONES: Record<GoalHealth, "success" | "warning" | "danger" |
   NO_DATA: "neutral",
   CANCELLED: "neutral",
 };
+
+export const MEASURE_NAMES: Record<GoalMeasure, string> = { METRIC: "Metric", TASKS: "Linked tasks", CHILDREN: "Child goals" };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   TODO: "To do",

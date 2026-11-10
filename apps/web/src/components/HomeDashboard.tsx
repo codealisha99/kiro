@@ -3,20 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { homeApi, type GoalOptions, type HomeResponse } from "@/lib/home-api";
-import { toIsoDay, scopeLabel } from "@/lib/goal-format";
-import { GoalDialog } from "./GoalDialog";
+import { homeApi, type HomeResponse, type ThroughputResponse } from "@/lib/home-api";
+import { scopeLabel, toIsoDay } from "@/lib/goal-format";
 import { HomeGoals } from "./HomeGoals";
+import { HomeHealth, HomeThroughput } from "./HomeInsights";
+import { HomeStats } from "./HomeStats";
 import { HomeTasks } from "./HomeTasks";
 import { HomeTeam } from "./HomeTeam";
 import "./home-dashboard.css";
-
-const SUMMARY_LABELS: [string, string][] = [
-  ["tasks", "Tasks"],
-  ["completed", "Completed"],
-  ["blocked", "Blocked"],
-  ["overdue", "Overdue"],
-];
+import "./goals-page.css";
 
 function loadErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.status === 403) {
@@ -33,17 +28,16 @@ function greetingPart(date: Date): string {
 
 export default function HomeDashboard() {
   const [home, setHome] = useState<HomeResponse | null>(null);
-  const [options, setOptions] = useState<GoalOptions | null>(null);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [throughput, setThroughput] = useState<ThroughputResponse | null>(null);
+  const [throughputError, setThroughputError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [goalId, setGoalId] = useState<string | null>(null);
   const generation = useRef(0);
 
   const refresh = useCallback(async () => {
     const run = ++generation.current;
     setLoading(true);
-    const [homeResult, optionsResult] = await Promise.allSettled([homeApi.home(), homeApi.goalOptions()]);
+    const [homeResult, throughputResult] = await Promise.allSettled([homeApi.home(), homeApi.throughput(8)]);
     if (run !== generation.current) return;
     if (homeResult.status === "fulfilled") {
       setHome(homeResult.value);
@@ -52,12 +46,12 @@ export default function HomeDashboard() {
       setHome(null);
       setError(loadErrorMessage(homeResult.reason));
     }
-    if (optionsResult.status === "fulfilled") {
-      setOptions(optionsResult.value);
-      setOptionsError(null);
+    if (throughputResult.status === "fulfilled") {
+      setThroughput(throughputResult.value);
+      setThroughputError(null);
     } else {
-      setOptions(null);
-      setOptionsError(loadErrorMessage(optionsResult.reason));
+      setThroughput(null);
+      setThroughputError(loadErrorMessage(throughputResult.reason));
     }
     setLoading(false);
   }, []);
@@ -83,7 +77,6 @@ export default function HomeDashboard() {
 
   const today = toIsoDay(new Date());
   const firstName = home.me.name.split(" ")[0] || home.me.name;
-  const summary = SUMMARY_LABELS.filter(([key]) => home.scopeSummary.metrics[key] !== undefined && home.scopeSummary.metrics[key] !== null);
 
   return (
     <section className="home-dashboard" aria-busy={loading}>
@@ -93,43 +86,26 @@ export default function HomeDashboard() {
           <h1>Good {greetingPart(new Date())}, {firstName}</h1>
           <p className="muted">Your goals, your open work, and the people you can see.</p>
         </div>
-        {summary.length > 0 && (
-          <dl className="home-summary">
-            {summary.map(([key, label]) => (
-              <div key={key}>
-                <dt>{label}</dt>
-                <dd>{String(home.scopeSummary.metrics[key])}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
       </header>
-      <details className="home-method">
-        <summary>How these numbers are calculated</summary>
-        <p>{home.method}</p>
-        <p>Calculated {new Date(home.generatedAt).toLocaleString("en-US")}. Refresh after goals or work change.</p>
-      </details>
       {error && (
         <Alert tone="danger">
           {error} Access may have changed. <Button variant="secondary" size="small" onClick={() => void refresh()}>Refresh</Button>
         </Alert>
       )}
-      <HomeGoals
-        goals={home.goals}
-        viewerId={home.me.id}
-        options={options}
-        optionsError={optionsError}
-        onOpenGoal={setGoalId}
-        onChanged={() => void refresh()}
-      />
+      <HomeStats home={home} throughput={throughput} />
+      <div className="home-insights">
+        <HomeThroughput throughput={throughput} error={throughputError} />
+        <HomeHealth goals={home.goals} />
+      </div>
+      <HomeGoals goals={home.goals} />
       <HomeTasks tasks={home.myTasks} goals={home.goals} today={today} />
       <HomeTeam team={home.team} />
-      <GoalDialog
-        goalId={goalId}
-        goals={home.goals}
-        onClose={() => setGoalId(null)}
-        onChanged={() => void refresh()}
-      />
+      <details className="home-method">
+        <summary>How these numbers are calculated</summary>
+        <p>{home.method}</p>
+        {throughput && <p>{throughput.method}</p>}
+        <p>Calculated {new Date(home.generatedAt).toLocaleString("en-US")}. Refresh the page after goals or work change.</p>
+      </details>
     </section>
   );
 }
