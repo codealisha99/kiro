@@ -2,6 +2,7 @@ package com.kiro.api.admin;
 
 import com.kiro.api.domain.AiRequestRepository;
 import com.kiro.api.domain.AuditLogRepository;
+import com.kiro.api.domain.DocumentChunkRepository;
 import com.kiro.api.domain.DocumentRepository;
 import com.kiro.api.domain.FeedbackRepository;
 import com.kiro.api.domain.SourceRepository;
@@ -12,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,8 @@ class AdminService {
   private final DocumentRepository documents;
   private final AiRequestRepository requests;
   private final FeedbackRepository feedback;
+  private final DocumentChunkRepository chunks;
+  private final JdbcTemplate jdbc;
 
   AdminService(
       AuditLogRepository audits,
@@ -36,13 +40,17 @@ class AdminService {
       SourceRepository sources,
       DocumentRepository documents,
       AiRequestRepository requests,
-      FeedbackRepository feedback) {
+      FeedbackRepository feedback,
+      DocumentChunkRepository chunks,
+      JdbcTemplate jdbc) {
     this.audits = audits;
     this.queue = queue;
     this.sources = sources;
     this.documents = documents;
     this.requests = requests;
     this.feedback = feedback;
+    this.chunks = chunks;
+    this.jdbc = jdbc;
   }
 
   List<Map<String, Object>> audit(AuthenticatedPrincipal user, int limit) {
@@ -66,12 +74,30 @@ class AdminService {
     return out;
   }
 
+  // Tenant-scoped only. The job queue is shared by every workspace, so its lengths and raw entries
+  // are never returned; failures are kept only when their document version belongs to this tenant.
   Map<String, Object> ingestion(AuthenticatedPrincipal user) {
+    var counts = chunks.countEmbeddings(user.tenantId());
+    List<Map<String, String>> recent = queue.recentFailures(500);
+    List<String> ids = recent.stream().map(f -> f.get("versionId")).distinct().toList();
+    java.util.Set<String> owned = java.util.Set.of();
+    if (!ids.isEmpty()) {
+      Object[] params = new Object[ids.size() + 1];
+      params[0] = user.tenantId();
+      for (int i = 0; i < ids.size(); i++) params[i + 1] = ids.get(i);
+      owned = new java.util.HashSet<>(jdbc.queryForList("""
+          SELECT dv."id" FROM "document_versions" dv JOIN "documents" d ON d."id" = dv."documentId"
+          WHERE d."tenantId" = ? AND dv."id" IN (""" + String.join(",", java.util.Collections.nCopies(ids.size(), "?")) + ")",
+          String.class, params));
+    }
+    final java.util.Set<String> mine = owned;
+    var failed = recent.stream().filter(f -> mine.contains(f.get("versionId"))).limit(10).toList();
     return Map.of(
-        "queue", queue.queueStats(),
         "sources", sources.countByTenantIdAndDeletedFalse(user.tenantId()),
         "documents", documents.countByTenantIdAndDeletedFalse(user.tenantId()),
-        "failed", queue.failedJobs(10));
+        "chunks", counts.getTotal(),
+        "embeddedChunks", counts.getEmbedded(),
+        "failed", failed);
   }
 
   Map<String, Object> metrics(AuthenticatedPrincipal user) {

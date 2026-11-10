@@ -6,7 +6,6 @@ import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,7 +23,7 @@ import org.springframework.stereotype.Service;
 /**
  * Redis-backed embed queue — Java replacement for the BullMQ {@code ingestion} queue.
  * Same semantics: idempotent job per version ({@code embed-version-{id}}), 4 attempts,
- * exponential backoff (5s base), concurrency 4, DLQ after exhaustion, stats endpoint.
+ * exponential backoff (5s base), concurrency 4, DLQ after exhaustion.
  *
  * Data structures:
  *   kiro:jobs:embed            LIST   ready jobs (JSON {"versionId":...})
@@ -83,22 +82,20 @@ public class IngestJobService {
     redis.opsForList().rightPush(READY, "{\"versionId\":\"" + versionId + "\"}");
   }
 
-  public Map<String, Object> queueStats() {
-    Map<String, Object> stats = new HashMap<>();
-    stats.put("waiting", len(READY));
-    stats.put("delayed", zlen(DELAYED));
-    stats.put("failed", len(DLQ));
-    stats.put("active", 0);
-    stats.put("completed", "-");
-    return stats;
-  }
-
-  public List<Map<String, Object>> failedJobs(int limit) {
-    List<String> items = redis.opsForList().range(DLQ, 0, Math.max(0, limit - 1));
-    List<Map<String, Object>> out = new ArrayList<>();
+  /**
+   * Recent dead-lettered jobs as {versionId, error}. The queue is shared by every workspace, so
+   * callers must keep only versions that belong to the asking tenant before returning anything.
+   */
+  public List<Map<String, String>> recentFailures(int scan) {
+    List<String> items = redis.opsForList().range(DLQ, 0, Math.max(0, scan - 1));
+    List<Map<String, String>> out = new ArrayList<>();
     if (items == null) return out;
     for (String item : items) {
-      out.add(Map.of("id", item, "name", "embed-version", "data", item));
+      var match = java.util.regex.Pattern.compile("\"versionId\":\"([^\"]+)\"").matcher(item);
+      if (!match.find()) continue;
+      int split = item.indexOf(" :: ");
+      String error = split < 0 ? "" : item.substring(split + 4);
+      out.add(Map.of("versionId", match.group(1), "error", error.length() > 300 ? error.substring(0, 300) : error));
     }
     return out;
   }
@@ -187,16 +184,6 @@ public class IngestJobService {
     } catch (NumberFormatException e) {
       return 0;
     }
-  }
-
-  private long len(String key) {
-    Long v = redis.opsForList().size(key);
-    return v == null ? 0 : v;
-  }
-
-  private long zlen(String key) {
-    Long v = redis.opsForZSet().zCard(key);
-    return v == null ? 0 : v;
   }
 
   static String toVectorLiteral(List<Double> vector) {
