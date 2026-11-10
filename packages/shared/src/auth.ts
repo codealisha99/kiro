@@ -23,6 +23,8 @@ export interface UserDto {
   email: string;
   name: string | null;
   role: RBACRole;
+  /** Workspace display name; present on the signed-in user's own record. */
+  tenantName?: string | null;
 }
 
 export interface AuthResponse {

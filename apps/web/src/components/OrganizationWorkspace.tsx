@@ -42,8 +42,12 @@ export default function OrganizationWorkspace() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // OAuth returns land on Connections; other links (the Home setup guide) may name a tab.
+  // resolveOrgTab below still falls back to Overview for tabs this person can't see.
   useEffect(() => {
-    if (isOAuthReturn(window.location.search)) setTab("connections");
+    if (isOAuthReturn(window.location.search)) return setTab("connections");
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested && requested in ORG_TAB_LABELS) setTab(requested as OrgTab);
   }, []);
 
   const reload = useCallback(async () => { setSetup(await orgApi.setup()); }, []);

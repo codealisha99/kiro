@@ -73,3 +73,61 @@
   .home-chips { padding-inline-start: 0; }
   .home-stats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+
+/* First-run setup guide (HomeSetup). Shown to organization managers until every step is done. */
+.home-setup {
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-raised);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  animation: shell-view-in var(--duration-slow) var(--ease-out) both;
+}
+.home-setup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
+.home-setup-head h2 { margin: 0; font-family: var(--font-editorial); font-weight: 400; font-size: var(--text-xl); letter-spacing: -0.02em; }
+.home-setup-head p { margin: var(--space-1) 0 0; color: var(--color-muted); font-size: var(--text-sm); }
+.home-setup-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); margin-top: var(--space-4); }
+.home-setup-count { font-size: var(--text-xs); color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.home-setup-steps { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: grid; }
+.home-setup-steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.home-setup-steps h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.home-setup-steps p { margin: 2px 0 0; font-size: var(--text-xs); color: var(--color-muted); line-height: 1.5; }
+.home-setup-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.home-setup-steps li.is-next .home-setup-mark { border-color: var(--color-accent); color: var(--color-accent); }
+.home-setup-steps li.is-done .home-setup-mark { background: var(--color-success-soft); border-color: var(--color-success); color: var(--color-success); }
+.home-setup-steps li.is-done h3 { color: var(--color-muted); font-weight: 500; }
+.home-setup-done { font-size: var(--text-xs); color: var(--color-success); font-weight: 500; }
+.home-setup-collapsed, .home-setup-error { margin: 0; font-size: var(--text-sm); color: var(--color-muted); }
+.home-setup-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .home-setup { padding: var(--space-4); }
+  .home-setup-head { flex-direction: column; }
+  .home-setup-steps li { grid-template-columns: 28px minmax(0, 1fr); }
+  .home-setup-steps li > :last-child { grid-column: 2; justify-self: start; }
+}

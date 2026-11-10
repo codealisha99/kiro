@@ -550,7 +550,7 @@ export default function Workspace({
             )}
           </div>
         ) : view === "home" ? (
-          <HomeDashboard key={user?.id} />
+          <HomeDashboard key={user?.id} workspace={user?.tenantName?.trim() || undefined} />
         ) : view === "organization" ? (
           <OrganizationWorkspace key={user?.id} />
         ) : view === "work" ? (

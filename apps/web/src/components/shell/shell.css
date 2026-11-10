@@ -335,7 +335,6 @@ kbd {
 
 /* View entrance: each view remounts when you switch, so this runs once per navigation.
    Short and small, so it reads as "new place" without delaying work. Off under reduced motion. */
-@keyframes shell-view-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
 .workspace-main > :not(.shell-topbar):not(.workspace-notice) {
   animation: shell-view-in var(--duration-slow) var(--ease-out) both;
 }

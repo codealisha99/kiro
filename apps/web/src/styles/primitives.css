@@ -391,3 +391,6 @@ pre {
     animation: none;
   }
 }
+
+/* Shared entrance for a view or panel that just appeared (app views, admin, setup guide). */
+@keyframes shell-view-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }

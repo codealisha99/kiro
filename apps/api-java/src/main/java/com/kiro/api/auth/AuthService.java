@@ -66,7 +66,7 @@ public class AuthService {
     user.setPassword(passwords.encode(req.password()));
     user.setRole("ADMIN"); // first user bootstraps the tenant as admin
     users.save(user);
-    return new AuthResponse(toDto(user), issueTokens(user));
+    return new AuthResponse(withTenant(user), issueTokens(user));
   }
 
   @Transactional
@@ -79,7 +79,7 @@ public class AuthService {
         .filter(u -> u.getPassword() != null && passwords.matches(req.password(), u.getPassword()))
         .findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
-    return new AuthResponse(toDto(user), issueTokens(user));
+    return new AuthResponse(withTenant(user), issueTokens(user));
   }
 
   @Transactional
@@ -102,7 +102,7 @@ public class AuthService {
     if (!db.getTenantId().equals(principal.tenantId())) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session no longer valid");
     }
-    return toDto(db);
+    return withTenant(db);
   }
 
   private Tokens issueTokens(User user) {
@@ -123,6 +123,12 @@ public class AuthService {
   }
 
   public static UserDto toDto(User u) {
-    return new UserDto(u.getId(), u.getTenantId(), u.getEmail(), u.getName(), u.getRole().toLowerCase());
+    return new UserDto(u.getId(), u.getTenantId(), u.getEmail(), u.getName(), u.getRole().toLowerCase(), null);
+  }
+
+  // The signed-in user's own record also names their workspace, so the app can show the company name.
+  private UserDto withTenant(User u) {
+    String tenantName = tenants.findById(u.getTenantId()).map(Tenant::getName).orElse(null);
+    return new UserDto(u.getId(), u.getTenantId(), u.getEmail(), u.getName(), u.getRole().toLowerCase(), tenantName);
   }
 }

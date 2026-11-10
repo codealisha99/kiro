@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api";
 import { homeApi, type HomeResponse, type ThroughputResponse } from "@/lib/home-api";
 import { scopeLabel, toIsoDay } from "@/lib/goal-format";
 import { HomeGoals } from "./HomeGoals";
+import { HomeSetup } from "./HomeSetup";
 import { HomeHealth, HomeThroughput } from "./HomeInsights";
 import { HomeStats } from "./HomeStats";
 import { HomeTasks } from "./HomeTasks";
@@ -26,7 +27,7 @@ function greetingPart(date: Date): string {
   return hour < 18 ? "afternoon" : "evening";
 }
 
-export default function HomeDashboard() {
+export default function HomeDashboard({ workspace = "your workspace" }: { workspace?: string }) {
   const [home, setHome] = useState<HomeResponse | null>(null);
   const [throughput, setThroughput] = useState<ThroughputResponse | null>(null);
   const [throughputError, setThroughputError] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export default function HomeDashboard() {
           {error} Access may have changed. <Button variant="secondary" size="small" onClick={() => void refresh()}>Refresh</Button>
         </Alert>
       )}
+      <HomeSetup goals={home.goals.length} workspace={workspace} />
       <HomeStats home={home} throughput={throughput} />
       <div className="home-insights">
         <HomeThroughput throughput={throughput} error={throughputError} />

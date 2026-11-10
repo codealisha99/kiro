@@ -26,6 +26,7 @@ export function WorkspaceMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const name = user.name?.trim() || user.email.split("@")[0];
+  const workspace = user.tenantName?.trim() || "Workspace";
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +71,7 @@ export function WorkspaceMenu({
           <KiroMark />
         </span>
         <span className="ws-menu-name">
-          <strong>Kiro workspace</strong>
+          <strong>{workspace}</strong>
           <small>{name}</small>
         </span>
         <WorkspaceIcon name="chevronsUpDown" width="16" height="16" />
