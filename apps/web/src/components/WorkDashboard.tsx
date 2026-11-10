@@ -184,6 +184,7 @@ export default function WorkDashboard() {
             ) : (
               <WorkspaceOverview
                 overview={overview}
+                projects={projects}
                 notifications={notifications}
                 insights={insights}
                 insightOffset={insightOffset}

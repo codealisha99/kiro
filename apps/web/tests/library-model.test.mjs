@@ -49,3 +49,10 @@ test("labels use the product's access and status wording", () => {
   assert.equal(library.documentStatusLabel("draft"), "Draft");
   assert.equal(library.documentStatusTone("published"), "success");
 });
+
+test("freshness groups documents by how recently they changed", () => {
+  const now = Date.UTC(2026, 10, 10);
+  const day = 86_400_000;
+  const docs = [0, 30, 31, 182, 183, 900].map((d) => ({ updatedAt: new Date(now - d * day).toISOString() }));
+  assert.deepEqual(library.freshnessSegments(docs, now).map((s) => s.value), [2, 2, 2]);
+});

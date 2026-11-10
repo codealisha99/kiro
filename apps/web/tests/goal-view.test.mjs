@@ -122,3 +122,24 @@ test("weekly throughput labels weeks in UTC", () => {
   assert.deepEqual(result.categories, ["Sep 7", "Sep 14"]);
   assert.deepEqual(result.values, [4, 0]);
 });
+
+test("behind pace lists only active, measured goals that are behind, furthest first", () => {
+  const rows = view.behindPace([
+    goal({ id: "a", title: "A", progress: 0.2, expected: 0.6 }),
+    goal({ id: "b", title: "B", progress: 0.5, expected: 0.4 }), // ahead
+    goal({ id: "c", title: "C", progress: 0.3, expected: 0.5 }),
+    goal({ id: "d", title: "D", progress: null, expected: 0.9 }), // no data
+    goal({ id: "e", title: "E", progress: 0.1, expected: 0.9, status: "CANCELLED" }),
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.value]), [["a", 40], ["c", 20]]);
+  assert.equal(rows[0].detail, "20% vs 60% expected");
+});
+
+test("progress by scope averages each level and skips levels with nothing measured", () => {
+  const levels = view.progressByScope([
+    goal({ scope: "COMPANY", progress: 0.4, expected: 0.6 }),
+    goal({ scope: "COMPANY", progress: 0.6, expected: 0.6 }),
+    goal({ scope: "TEAM", progress: null }),
+  ]);
+  assert.deepEqual(levels, [{ scope: "COMPANY", count: 2, progress: 50, expected: 60 }]);
+});

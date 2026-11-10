@@ -8,6 +8,7 @@ import { selectedGoalParam, setSelectedGoalParam } from "@/lib/goal-nav";
 import { filterCounts, GOAL_FILTER_LABELS, GOAL_FILTERS, visibleGoalOrder, type GoalFilter, type GoalListMode } from "@/lib/goal-view";
 import { GoalDialog } from "./GoalDialog";
 import { GoalList } from "./GoalList";
+import { GoalsOverview } from "./GoalsOverview";
 import { GoalPanel } from "./GoalPanel";
 import "./goals-page.css";
 
@@ -196,6 +197,7 @@ export default function GoalsPage({ createRequest = 0 }: GoalsPageProps) {
         <p className="goals-shortcuts muted"><kbd>j</kbd> <kbd>k</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close · <kbd>c</kbd> new</p>
       </div>
       {loadError && goals.length > 0 && <Alert tone="warning">{loadError} Showing the last loaded goals.</Alert>}
+      {goals.length > 0 && <GoalsOverview goals={goals} />}
       <div className={`goals-layout${hasPanel ? " has-panel" : ""}`}>
         <section className="goals-list" aria-label="Goals">{body}</section>
         {selectedId && (

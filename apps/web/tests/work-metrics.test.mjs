@@ -118,3 +118,18 @@ test("project summary uses the server's counts and the latest update", () => {
   assert.equal(empty.progress, null);
   assert.equal(empty.updatedAt, "2026-11-01T00:00:00.000Z");
 });
+
+test("task status segments add up to the total", () => {
+  const segments = m.taskStatusSegments({ total_tasks: 23, completed_tasks: 17, blocked_tasks: 1 });
+  assert.deepEqual(segments.map((s) => s.value), [17, 5, 1]);
+});
+
+test("project completion ranks projects with tasks and skips empty ones", () => {
+  const rows = m.projectCompletion([
+    { id: "a", name: "Alpha", updated_at: "2026-11-01T00:00:00Z", task_total: 10, task_done: 5, task_blocked: 2, tasks_updated_at: null },
+    { id: "b", name: "Beta", updated_at: "2026-11-01T00:00:00Z", task_total: 4, task_done: 4, task_blocked: 0, tasks_updated_at: null },
+    { id: "c", name: "Empty", updated_at: "2026-11-01T00:00:00Z", task_total: 0, task_done: 0, task_blocked: 0, tasks_updated_at: null },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.value]), [["b", 100], ["a", 50]]);
+  assert.equal(rows[1].detail, "5 of 10 done, 2 blocked");
+});

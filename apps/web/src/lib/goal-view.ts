@@ -169,3 +169,29 @@ export function metricSeries(goal: Goal, checkins: GoalCheckin[]): LineSeriesInp
 export function childBars(children: Goal[]) {
   return children.map((child) => ({ id: child.id, label: child.title, value: child.progress }));
 }
+
+/** Active goals behind today's expected pace, furthest behind first. Values are percentage points. */
+export function behindPace(goals: readonly Goal[], limit = 5) {
+  return goals
+    .filter((g) => g.status === "ACTIVE" && g.progress !== null)
+    .map((g) => ({ goal: g, gap: Math.round((g.expected - (g.progress as number)) * 100) }))
+    .filter((row) => row.gap > 0)
+    .sort((a, b) => b.gap - a.gap || a.goal.title.localeCompare(b.goal.title))
+    .slice(0, limit)
+    .map(({ goal, gap }) => ({
+      id: goal.id,
+      label: goal.title,
+      value: gap,
+      detail: `${Math.round((goal.progress as number) * 100)}% vs ${Math.round(goal.expected * 100)}% expected`,
+    }));
+}
+
+/** Mean progress and mean expected progress per scope level, as whole percentages. Levels without measured goals are left out. */
+export function progressByScope(goals: readonly Goal[]) {
+  const levels = SCOPE_ORDER.map((scope) => {
+    const measured = goals.filter((g) => g.scope === scope && g.status === "ACTIVE" && g.progress !== null);
+    const mean = (pick: (g: Goal) => number) => Math.round((measured.reduce((sum, g) => sum + pick(g), 0) / measured.length) * 100);
+    return measured.length ? { scope, count: measured.length, progress: mean((g) => g.progress as number), expected: mean((g) => g.expected) } : null;
+  });
+  return levels.filter((level): level is NonNullable<typeof level> => level !== null);
+}

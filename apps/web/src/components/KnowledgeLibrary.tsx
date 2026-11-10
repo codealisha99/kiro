@@ -16,6 +16,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { StackedBar } from "@/components/charts";
 import { api } from "@/lib/api";
 import {
   ACCESS_FILTERS,
@@ -25,6 +26,7 @@ import {
   documentStatusLabel,
   documentStatusTone,
   filterDocuments,
+  freshnessSegments,
   sortDocuments,
   type AccessFilter,
   type LibrarySort,
@@ -47,6 +49,8 @@ export default function KnowledgeLibrary({
   onRefresh: () => Promise<void>;
   addRequest?: number;
 }) {
+  // Ages are measured from when the library opened, so the chart holds still while you work.
+  const [loadedAt] = useState(() => Date.now());
   const [access, setAccess] = useState<AccessFilter>("all");
   const [sort, setSort] = useState<LibrarySort>("updated");
   const [search, setSearch] = useState("");
@@ -163,6 +167,13 @@ export default function KnowledgeLibrary({
         </p>
       )}
       {error && !adding && <Alert tone="danger">{error}</Alert>}
+      {documents.length > 0 && (
+        <StackedBar
+          title="How current is it?"
+          description="Every document you can see, by when it last changed. Older guidance is worth a review."
+          segments={freshnessSegments(documents, loadedAt)}
+        />
+      )}
 
       <div className="library-toolbar">
         <div className="library-search">

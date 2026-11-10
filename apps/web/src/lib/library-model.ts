@@ -69,3 +69,21 @@ export function accessCounts(documents: readonly DocumentListItem[]): Record<Acc
   }
   return counts;
 }
+
+const DAY_MS = 86_400_000;
+
+/** How recently each document changed: within 30 days, within six months, or older. */
+export function freshnessSegments(documents: readonly Pick<DocumentListItem, "updatedAt">[], nowMs: number) {
+  const counts = { recent: 0, aging: 0, stale: 0 };
+  for (const d of documents) {
+    const age = (nowMs - new Date(d.updatedAt).getTime()) / DAY_MS;
+    if (age <= 30) counts.recent += 1;
+    else if (age <= 182) counts.aging += 1;
+    else counts.stale += 1;
+  }
+  return [
+    { id: "recent", label: "Updated in the last 30 days", value: counts.recent, tone: "good" as const },
+    { id: "aging", label: "1 to 6 months old", value: counts.aging, tone: "warning" as const },
+    { id: "stale", label: "Older than 6 months", value: counts.stale, tone: "danger" as const },
+  ];
+}

@@ -150,3 +150,30 @@ export function projectSummary(project: ProjectCounts) {
     updatedAt: updated ? new Date(updated).toISOString() : null,
   };
 }
+
+// Overview charts. Open excludes blocked tasks so the three segments add up to the total.
+export function taskStatusSegments(m: { total_tasks: number; completed_tasks: number; blocked_tasks: number }) {
+  const done = Number(m.completed_tasks);
+  const blocked = Number(m.blocked_tasks);
+  const open = Math.max(0, Number(m.total_tasks) - done - blocked);
+  return [
+    { id: "done", label: "Done", value: done, tone: "good" as const },
+    { id: "open", label: "Open", value: open, tone: "accent" as const },
+    { id: "blocked", label: "Blocked", value: blocked, tone: "danger" as const },
+  ];
+}
+
+// Projects with tasks, most complete first, as whole percentages.
+export function projectCompletion(projects: Pick<WorkProject, "id" | "name" | "updated_at" | "task_total" | "task_done" | "task_blocked" | "tasks_updated_at">[], limit = 8) {
+  return projects
+    .map((p) => ({ p, s: projectSummary(p) }))
+    .filter(({ s }) => s.total > 0)
+    .sort((a, b) => (b.s.progress ?? 0) - (a.s.progress ?? 0) || a.p.name.localeCompare(b.p.name))
+    .slice(0, limit)
+    .map(({ p, s }) => ({
+      id: p.id,
+      label: p.name,
+      value: Math.round((s.progress ?? 0) * 100),
+      detail: `${s.done} of ${s.total} done${s.blocked ? `, ${s.blocked} blocked` : ""}`,
+    }));
+}

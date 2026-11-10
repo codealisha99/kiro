@@ -1,11 +1,16 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Section } from "@/components/ui";
-import { StatTile, formatNumber } from "@/components/charts";
-import type { WorkInsight, WorkNotification, WorkOverview } from "@/lib/work-api";
+import { HBarChart, StackedBar, StatTile, formatNumber } from "@/components/charts";
+import { homeApi, type ThroughputResponse } from "@/lib/home-api";
+import type { WorkInsight, WorkNotification, WorkOverview, WorkProject } from "@/lib/work-api";
+import { projectCompletion, taskStatusSegments } from "@/lib/work-metrics";
+import { HomeThroughput } from "../HomeInsights";
 import { INSIGHT_LABELS, INSIGHT_RECOMMENDATIONS } from "./insight-copy";
 
 type Props = {
   overview: WorkOverview;
+  projects: WorkProject[];
   notifications: WorkNotification[];
   insights: WorkInsight[];
   insightOffset: number;
@@ -17,8 +22,18 @@ type Props = {
 };
 
 // Workspace-wide view shown when no project is selected: totals, notifications, and the insight center.
-export function WorkspaceOverview({ overview, notifications, insights, insightOffset, busy, onReview, onMarkRead, onInspect, onInsightPage }: Props) {
+export function WorkspaceOverview({ overview, projects, notifications, insights, insightOffset, busy, onReview, onMarkRead, onInspect, onInsightPage }: Props) {
   const m = overview.metrics;
+  const [throughput, setThroughput] = useState<ThroughputResponse | null>(null);
+  const [throughputError, setThroughputError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    homeApi.throughput(8).then(
+      (t) => { if (active) setThroughput(t); },
+      (e: unknown) => { if (active) setThroughputError(e instanceof Error ? e.message : "Weekly completions could not be loaded."); },
+    );
+    return () => { active = false; };
+  }, []);
   return (
     <div className="work-overview">
       <Section title="Workspace totals" description={`${overview.scope}. ${overview.method}`}>
@@ -29,6 +44,17 @@ export function WorkspaceOverview({ overview, notifications, insights, insightOf
           <StatTile label="Blocked" value={formatNumber(m.blocked_tasks)} />
           <StatTile label="Unassigned" value={formatNumber(m.unassigned_tasks)} />
           <StatTile label="Estimated hours remaining" value={formatNumber(m.estimated_remaining_hours)} note={`${m.missing_estimates} unfinished tasks lack estimates`} />
+        </div>
+        <div className="work-charts">
+          <StackedBar title="Task status" description="Every recorded task in your scope. Open excludes blocked." segments={taskStatusSegments(m)} emptyText="No tasks recorded yet." />
+          <HomeThroughput throughput={throughput} error={throughputError} />
+          <HBarChart
+            title="Projects by completion"
+            description="Share of each project's tasks that are done, on this page of projects."
+            items={projectCompletion(projects)}
+            valueFormat={(v) => `${v}%`}
+            emptyText="No projects with tasks yet."
+          />
         </div>
         <details className="work-disclosure">
           <summary>Calculation and data quality</summary>

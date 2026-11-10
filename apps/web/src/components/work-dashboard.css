@@ -141,3 +141,6 @@
   .work-task-row .work-task-hours { display: none; }
   .work-props > div { grid-template-columns: 100px minmax(0, 1fr); }
 }
+.work-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); align-items: start; margin-top: var(--space-3); }
+.work-charts > :last-child { grid-column: 1 / -1; }
+@media (max-width: 900px) { .work-charts { grid-template-columns: minmax(0, 1fr); } }
